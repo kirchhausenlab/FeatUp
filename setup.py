@@ -17,6 +17,8 @@ setup(
         "numpy",
         "matplotlib",
         "timm==0.4.12",
+        "ftfy",
+        "regex",
     ],
     author="Mark Hamilton, Stephanie Fu",
     author_email="markth@mit.edu, fus@berkeley.edu",

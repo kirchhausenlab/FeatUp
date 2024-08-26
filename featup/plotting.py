@@ -34,9 +34,15 @@ def plot_lang_heatmaps(model, image, lr_feats, hr_feats, text_query):
     assert len(text_feats.shape) == 1
 
     lr_sims = torch.einsum(
-        "chw,c->hw", F.normalize(lr_feats.to(torch.float32), dim=0), F.normalize(text_feats, dim=0))
+        "chw,c->hw",
+        F.normalize(lr_feats.to(torch.float32), dim=0),
+        F.normalize(text_feats, dim=0),
+    )
     hr_sims = torch.einsum(
-        "chw,c->hw", F.normalize(hr_feats.to(torch.float32), dim=0), F.normalize(text_feats, dim=0))
+        "chw,c->hw",
+        F.normalize(hr_feats.to(torch.float32), dim=0),
+        F.normalize(text_feats, dim=0),
+    )
 
     lr_sims_norm = (lr_sims - lr_sims.min()) / (lr_sims.max() - lr_sims.min())
     hr_sims_norm = (hr_sims - hr_sims.min()) / (hr_sims.max() - hr_sims.min())
@@ -46,9 +52,9 @@ def plot_lang_heatmaps(model, image, lr_feats, hr_feats, text_query):
     ax[0].imshow(image.permute(1, 2, 0).detach().cpu())
     ax[0].set_title("Image")
     ax[1].imshow(lr_heatmap)
-    ax[1].set_title(f"Original Similarity to \"{text_query}\"")
+    ax[1].set_title(f'Original Similarity to "{text_query}"')
     ax[2].imshow(hr_heatmap)
-    ax[2].set_title(f"Upsampled Similarity to \"{text_query}\"")
+    ax[2].set_title(f'Upsampled Similarity to "{text_query}"')
     remove_axes(ax)
 
     return plt.show()
