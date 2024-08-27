@@ -19,6 +19,8 @@ setup(
         "timm==0.4.12",
         "ftfy",
         "regex",
+        "xformers",
+        "triton",
     ],
     author="Mark Hamilton, Stephanie Fu",
     author_email="markth@mit.edu, fus@berkeley.edu",

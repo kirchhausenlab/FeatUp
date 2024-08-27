@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from pathlib import Path
 from featup.util import pca, remove_axes
 from featup.featurizers.maskclip.clip import tokenize
 from pytorch_lightning import seed_everything
@@ -7,7 +8,7 @@ import torch.nn.functional as F
 
 
 @torch.no_grad()
-def plot_feats(image, lr, hr):
+def plot_feats(image, lr, hr, save_path: Path):
     assert len(image.shape) == len(lr.shape) == len(hr.shape) == 3
     seed_everything(0)
     [lr_feats_pca, hr_feats_pca], _ = pca([lr.unsqueeze(0), hr.unsqueeze(0)])
@@ -19,7 +20,8 @@ def plot_feats(image, lr, hr):
     ax[2].imshow(hr_feats_pca[0].permute(1, 2, 0).detach().cpu())
     ax[2].set_title("Upsampled Features")
     remove_axes(ax)
-    plt.show()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path)
 
 
 @torch.no_grad()
