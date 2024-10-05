@@ -6,12 +6,13 @@ from featup.featurizers.maskclip import clip
 
 
 class MaskCLIPFeaturizer(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.model, self.preprocess = clip.load(
             "ViT-B/16",
-            download_root=os.getenv('TORCH_HOME', os.path.join(os.path.expanduser('~'), '.cache', 'torch'))
+            download_root=os.getenv(
+                "TORCH_HOME", os.path.join(os.path.expanduser("~"), ".cache", "torch")
+            ),
         )
         self.model.eval()
         self.patch_size = self.model.visual.patch_size
@@ -25,7 +26,7 @@ class MaskCLIPFeaturizer(nn.Module):
 
 
 if __name__ == "__main__":
-    import torchvision.transforms as T
+    from torchvision.transforms import v2
     from PIL import Image
     from featup.util import norm, unnorm, crop_to_divisor
 
@@ -33,12 +34,15 @@ if __name__ == "__main__":
 
     image = Image.open("../samples/lex1.jpg")
     load_size = 224  # * 3
-    transform = T.Compose([
-        T.Resize(load_size, Image.BILINEAR),
-        # T.CenterCrop(load_size),
-        T.ToTensor(),
-        lambda x: crop_to_divisor(x, 16),
-        norm])
+    transform = v2.Compose(
+        [
+            v2.Resize(load_size, v2.InterpolationMode.BILINEAR),
+            # T.CenterCrop(load_size),
+            v2.ToTensor(),
+            lambda x: crop_to_divisor(x, 16),
+            norm,
+        ]
+    )
 
     model = MaskCLIPFeaturizer().cuda()
 

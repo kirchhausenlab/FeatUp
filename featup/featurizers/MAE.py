@@ -9,10 +9,17 @@ import torch.nn.functional as F
 
 
 class PatchEmbed(nn.Module):
-    """ 2D Image to Patch Embedding
-    """
+    """2D Image to Patch Embedding"""
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):
+    def __init__(
+        self,
+        img_size=224,
+        patch_size=16,
+        in_chans=3,
+        embed_dim=768,
+        norm_layer=None,
+        flatten=True,
+    ):
         super().__init__()
         img_size = (img_size, img_size)
         patch_size = (patch_size, patch_size)
@@ -22,7 +29,9 @@ class PatchEmbed(nn.Module):
         self.num_patches = self.grid_size[0] * self.grid_size[1]
         self.flatten = flatten
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
     def forward(self, x):
@@ -73,11 +82,11 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
     assert embed_dim % 2 == 0
     omega = np.arange(embed_dim // 2, dtype=np.float)
-    omega /= embed_dim / 2.
-    omega = 1. / 10000 ** omega  # (D/2,)
+    omega /= embed_dim / 2.0
+    omega = 1.0 / 10000**omega  # (D/2,)
 
     pos = pos.reshape(-1)  # (M,)
-    out = np.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
+    out = np.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
 
     emb_sin = np.sin(out)  # (M, D/2)
     emb_cos = np.cos(out)  # (M, D/2)
@@ -92,41 +101,62 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
 # DeiT: https://github.com/facebookresearch/deit
 # --------------------------------------------------------
 def interpolate_pos_embed(model, checkpoint_model):
-    if 'pos_embed' in checkpoint_model:
-        pos_embed_checkpoint = checkpoint_model['pos_embed']
+    if "pos_embed" in checkpoint_model:
+        pos_embed_checkpoint = checkpoint_model["pos_embed"]
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.patch_embed.num_patches
         num_extra_tokens = model.pos_embed.shape[-2] - num_patches
         # height (== width) for the checkpoint position embedding
         orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
         # height (== width) for the new position embedding
-        new_size = int(num_patches ** 0.5)
+        new_size = int(num_patches**0.5)
         # class_token and dist_token are kept unchanged
         if orig_size != new_size:
-            print("Position interpolate from %dx%d to %dx%d" % (orig_size, orig_size, new_size, new_size))
+            print(
+                "Position interpolate from %dx%d to %dx%d"
+                % (orig_size, orig_size, new_size, new_size)
+            )
             extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
             # only the position tokens are interpolated
             pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
-            pos_tokens = pos_tokens.reshape(-1, orig_size, orig_size, embedding_size).permute(0, 3, 1, 2)
+            pos_tokens = pos_tokens.reshape(
+                -1, orig_size, orig_size, embedding_size
+            ).permute(0, 3, 1, 2)
             pos_tokens = torch.nn.functional.interpolate(
-                pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
+                pos_tokens,
+                size=(new_size, new_size),
+                mode="bicubic",
+                align_corners=False,
+            )
             pos_tokens = pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
             new_pos_embed = torch.cat((extra_tokens, pos_tokens), dim=1)
-            checkpoint_model['pos_embed'] = new_pos_embed
+            checkpoint_model["pos_embed"] = new_pos_embed
 
 
 def sample(t: torch.Tensor, coords: torch.Tensor):
-    return F.grid_sample(t, coords.permute(0, 2, 1, 3), padding_mode='border', align_corners=True)
+    return F.grid_sample(
+        t, coords.permute(0, 2, 1, 3), padding_mode="border", align_corners=True
+    )
 
 
 class MaskedAutoencoderViT(nn.Module):
-    """ Masked Autoencoder with VisionTransformer backbone
-    """
+    """Masked Autoencoder with VisionTransformer backbone"""
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3,
-                 embed_dim=1024, depth=24, num_heads=16,
-                 decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
-                 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False):
+    def __init__(
+        self,
+        img_size=224,
+        patch_size=16,
+        in_chans=3,
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        decoder_embed_dim=512,
+        decoder_depth=8,
+        decoder_num_heads=16,
+        mlp_ratio=4.0,
+        norm_layer=nn.LayerNorm,
+        norm_pix_loss=False,
+    ):
         super().__init__()
 
         # --------------------------------------------------------------------------
@@ -136,12 +166,22 @@ class MaskedAutoencoderViT(nn.Module):
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim),
-                                      requires_grad=False)  # fixed sin-cos embedding
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False
+        )  # fixed sin-cos embedding
 
-        self.blocks = nn.ModuleList([
-            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
-            for i in range(depth)])
+        self.blocks = nn.ModuleList(
+            [
+                Block(
+                    embed_dim,
+                    num_heads,
+                    mlp_ratio,
+                    qkv_bias=True,
+                    norm_layer=norm_layer,
+                )
+                for i in range(depth)
+            ]
+        )
         self.norm = norm_layer(embed_dim)
         # --------------------------------------------------------------------------
 
@@ -151,15 +191,27 @@ class MaskedAutoencoderViT(nn.Module):
 
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
 
-        self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim),
-                                              requires_grad=False)  # fixed sin-cos embedding
+        self.decoder_pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=False
+        )  # fixed sin-cos embedding
 
-        self.decoder_blocks = nn.ModuleList([
-            Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
-            for i in range(decoder_depth)])
+        self.decoder_blocks = nn.ModuleList(
+            [
+                Block(
+                    decoder_embed_dim,
+                    decoder_num_heads,
+                    mlp_ratio,
+                    qkv_bias=True,
+                    norm_layer=norm_layer,
+                )
+                for i in range(decoder_depth)
+            ]
+        )
 
         self.decoder_norm = norm_layer(decoder_embed_dim)
-        self.decoder_pred = nn.Linear(decoder_embed_dim, patch_size ** 2 * in_chans, bias=True)  # decoder to patch
+        self.decoder_pred = nn.Linear(
+            decoder_embed_dim, patch_size**2 * in_chans, bias=True
+        )  # decoder to patch
         # --------------------------------------------------------------------------
 
         self.norm_pix_loss = norm_pix_loss
@@ -169,21 +221,29 @@ class MaskedAutoencoderViT(nn.Module):
     def initialize_weights(self):
         # initialization
         # initialize (and freeze) pos_embed by sin-cos embedding
-        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches ** .5),
-                                            cls_token=True)
+        pos_embed = get_2d_sincos_pos_embed(
+            self.pos_embed.shape[-1],
+            int(self.patch_embed.num_patches**0.5),
+            cls_token=True,
+        )
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
-        decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1],
-                                                    int(self.patch_embed.num_patches ** .5), cls_token=True)
-        self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
+        decoder_pos_embed = get_2d_sincos_pos_embed(
+            self.decoder_pos_embed.shape[-1],
+            int(self.patch_embed.num_patches**0.5),
+            cls_token=True,
+        )
+        self.decoder_pos_embed.data.copy_(
+            torch.from_numpy(decoder_pos_embed).float().unsqueeze(0)
+        )
 
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
         w = self.patch_embed.proj.weight.data
         torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        torch.nn.init.normal_(self.cls_token, std=.02)
-        torch.nn.init.normal_(self.mask_token, std=.02)
+        torch.nn.init.normal_(self.cls_token, std=0.02)
+        torch.nn.init.normal_(self.mask_token, std=0.02)
 
         # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
@@ -208,8 +268,8 @@ class MaskedAutoencoderViT(nn.Module):
 
         h = w = imgs.shape[2] // p
         x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
-        x = torch.einsum('nchpwq->nhwpqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2 * 3))
+        x = torch.einsum("nchpwq->nhwpqc", x)
+        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
         return x
 
     def unpatchify(self, x):
@@ -218,11 +278,11 @@ class MaskedAutoencoderViT(nn.Module):
         imgs: (N, 3, H, W)
         """
         p = self.patch_embed.patch_size[0]
-        h = w = int(x.shape[1] ** .5)
+        h = w = int(x.shape[1] ** 0.5)
         assert h * w == x.shape[1]
 
         x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
-        x = torch.einsum('nhwpqc->nchpwq', x)
+        x = torch.einsum("nhwpqc->nchpwq", x)
         imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
         return imgs
 
@@ -238,7 +298,9 @@ class MaskedAutoencoderViT(nn.Module):
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
 
         # sort noise for each sample
-        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_shuffle = torch.argsort(
+            noise, dim=1
+        )  # ascend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset
@@ -262,16 +324,25 @@ class MaskedAutoencoderViT(nn.Module):
         original_num_patches = 224 // p
         embed_dim = pe.shape[-1]
 
-        reshaped_pe = pe.squeeze(0)[1:] \
-            .reshape(1, original_num_patches, original_num_patches, embed_dim) \
+        reshaped_pe = (
+            pe.squeeze(0)[1:]
+            .reshape(1, original_num_patches, original_num_patches, embed_dim)
             .permute(0, 3, 1, 2)
+        )
 
-        XX, YY = torch.meshgrid(torch.linspace(-1, 1, H, device=img.device, dtype=img.dtype),
-                                torch.linspace(-1, 1, W, device=img.device, dtype=img.dtype))
+        XX, YY = torch.meshgrid(
+            torch.linspace(-1, 1, H, device=img.device, dtype=img.dtype),
+            torch.linspace(-1, 1, W, device=img.device, dtype=img.dtype),
+        )
 
         coords = torch.cat([XX.unsqueeze(-1), YY.unsqueeze(-1)], dim=-1).unsqueeze(0)
 
-        return sample(reshaped_pe, coords).reshape(embed_dim, H * W).permute(1, 0).unsqueeze(0)
+        return (
+            sample(reshaped_pe, coords)
+            .reshape(embed_dim, H * W)
+            .permute(1, 0)
+            .unsqueeze(0)
+        )
 
     def featurize(self, img, n_decoder_blocks=None):
         p = self.patch_embed.patch_size[0]
@@ -294,9 +365,8 @@ class MaskedAutoencoderViT(nn.Module):
             x = blk(x)
         x = self.norm(x)
 
-
         # embed tokens
-        #x = self.decoder_embed(x)
+        # x = self.decoder_embed(x)
         #
         # # add pos embed
         # cls_token = x[:, :1] + self.decoder_pos_embed[0, :1]
@@ -321,8 +391,9 @@ class MaskedAutoencoderViT(nn.Module):
         #
         # return x
 
-        return x[:, 1:, :].reshape(shape=(x.shape[0], H, W, -1)) \
-                   .permute(0, 3, 1, 2), x[:, 0, :]
+        return x[:, 1:, :].reshape(shape=(x.shape[0], H, W, -1)).permute(0, 3, 1, 2), x[
+            :, 0, :
+        ]
 
     def forward_encoder(self, img, mask_ratio):
         # embed patches
@@ -330,7 +401,6 @@ class MaskedAutoencoderViT(nn.Module):
 
         # add pos embed w/o cls token
         x = x + self.sample_pe(img, self.pos_embed)
-
 
         # masking: length -> length * mask_ratio
         x, mask, ids_restore = self.random_masking(x, mask_ratio)
@@ -352,9 +422,13 @@ class MaskedAutoencoderViT(nn.Module):
         x = self.decoder_embed(x)
 
         # append mask tokens to sequence
-        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+        mask_tokens = self.mask_token.repeat(
+            x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1
+        )
         x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
-        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x_ = torch.gather(
+            x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2])
+        )  # unshuffle
         x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
         # # add pos embed
@@ -389,7 +463,7 @@ class MaskedAutoencoderViT(nn.Module):
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6) ** .5
+            target = (target - mean) / (var + 1.0e-6) ** 0.5
 
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
@@ -405,7 +479,6 @@ class MaskedAutoencoderViT(nn.Module):
 
 
 class MAEFeaturizer(nn.Module):
-
     def __init__(self, arch="mae_vit_large_patch16_gan"):
         super().__init__()
         # build model
@@ -414,32 +487,38 @@ class MAEFeaturizer(nn.Module):
             decoder_depth=8,
             decoder_num_heads=16,
             mlp_ratio=4,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6)
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
         )
         if arch == "mae_vit_base_patch16":
             self.model = MaskedAutoencoderViT(
-                patch_size=16, embed_dim=768, depth=12, num_heads=12, **shared_args)
-            chkpoint_dir = '../models/mae_visualize_vit_base.pth'
+                patch_size=16, embed_dim=768, depth=12, num_heads=12, **shared_args
+            )
+            chkpoint_dir = "../models/mae_visualize_vit_base.pth"
         elif arch == "mae_vit_large_patch16":
             self.model = MaskedAutoencoderViT(
-                patch_size=16, embed_dim=1024, depth=24, num_heads=16, **shared_args)
-            chkpoint_dir = '../models/mae_visualize_vit_large.pth'
+                patch_size=16, embed_dim=1024, depth=24, num_heads=16, **shared_args
+            )
+            chkpoint_dir = "../models/mae_visualize_vit_large.pth"
         elif arch == "mae_vit_large_patch16_gan":
             self.model = MaskedAutoencoderViT(
-                patch_size=16, embed_dim=1024, depth=24, num_heads=16, **shared_args)
-            chkpoint_dir = '../models/mae_visualize_vit_large_ganloss.pth'
+                patch_size=16, embed_dim=1024, depth=24, num_heads=16, **shared_args
+            )
+            chkpoint_dir = "../models/mae_visualize_vit_large_ganloss.pth"
         elif arch == "mae_vit_huge_patch14":
             self.model = MaskedAutoencoderViT(
-                patch_size=14, embed_dim=1280, depth=32, num_heads=16, **shared_args)
-            chkpoint_dir = '../models/mae_visualize_vit_huge.pth'
+                patch_size=14, embed_dim=1280, depth=32, num_heads=16, **shared_args
+            )
+            chkpoint_dir = "../models/mae_visualize_vit_huge.pth"
         else:
             raise ValueError("Unknown model arch {}".format(arch))
 
         # load model
-        chkpoint_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), chkpoint_dir)
+        chkpoint_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), chkpoint_dir
+        )
 
         checkpoint = torch.load(chkpoint_dir)
-        self.model.load_state_dict(checkpoint['model'], strict=False)
+        self.model.load_state_dict(checkpoint["model"], strict=False)
 
     def get_cls_token(self, img):
         feats, cls_token = self.model.featurize(img)
@@ -451,7 +530,7 @@ class MAEFeaturizer(nn.Module):
 
 
 if __name__ == "__main__":
-    import torchvision.transforms as T
+    from torchvision.transforms import v2
     from PIL import Image
     from shared import norm, crop_to_divisor
 
@@ -459,12 +538,15 @@ if __name__ == "__main__":
 
     image = Image.open("../samples/lex1.jpg")
     load_size = 224  # * 3
-    transform = T.Compose([
-        T.Resize(load_size, Image.BILINEAR),
-        # T.CenterCrop(load_size),
-        T.ToTensor(),
-        lambda x: crop_to_divisor(x, 16),
-        norm])
+    transform = v2.Compose(
+        [
+            v2.Resize(load_size, v2.InterpolationMode.BILINEAR),
+            # T.CenterCrop(load_size),
+            v2.ToTensor(),
+            lambda x: crop_to_divisor(x, 16),
+            norm,
+        ]
+    )
 
     model = MAEFeaturizer().cuda()
 

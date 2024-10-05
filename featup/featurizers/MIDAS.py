@@ -1,12 +1,13 @@
 import timm
 import torch
 import torch.nn as nn
-import torchvision.transforms as T
+from torchvision.transforms import v2
 from PIL import Image
 from timm.models.layers import get_act_layer
 import numpy as np
 from torch.nn.functional import interpolate
 import os
+
 
 class Transpose(nn.Module):
     def __init__(self, dim0, dim1):
@@ -36,7 +37,7 @@ class BaseModel(torch.nn.Module):
         Args:
             path (str): file path
         """
-        parameters = torch.load(path, map_location=torch.device('cpu'))
+        parameters = torch.load(path, map_location=torch.device("cpu"))
 
         if "optimizer" in parameters:
             parameters = parameters["model"]
@@ -44,12 +45,20 @@ class BaseModel(torch.nn.Module):
         self.load_state_dict(parameters)
 
 
-def _make_encoder(backbone, features, use_pretrained, groups=1, expand=False, exportable=True, hooks=None,
-                  use_vit_only=False, use_readout="ignore", in_features=[96, 256, 512, 1024]):
+def _make_encoder(
+    backbone,
+    features,
+    use_pretrained,
+    groups=1,
+    expand=False,
+    exportable=True,
+    hooks=None,
+    use_vit_only=False,
+    use_readout="ignore",
+    in_features=[96, 256, 512, 1024],
+):
     if backbone == "levit_384":
-        pretrained = _make_pretrained_levit_384(
-            use_pretrained, hooks=hooks
-        )
+        pretrained = _make_pretrained_levit_384(use_pretrained, hooks=hooks)
         scratch = _make_scratch(
             [384, 512, 768], features, groups=groups, expand=expand
         )  # LeViT 384 (backbone)
@@ -77,25 +86,48 @@ def _make_scratch(in_shape, out_shape, groups=1, expand=False):
             out_shape4 = out_shape * 8
 
     scratch.layer1_rn = nn.Conv2d(
-        in_shape[0], out_shape1, kernel_size=3, stride=1, padding=1, bias=False, groups=groups
+        in_shape[0],
+        out_shape1,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        bias=False,
+        groups=groups,
     )
     scratch.layer2_rn = nn.Conv2d(
-        in_shape[1], out_shape2, kernel_size=3, stride=1, padding=1, bias=False, groups=groups
+        in_shape[1],
+        out_shape2,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        bias=False,
+        groups=groups,
     )
     scratch.layer3_rn = nn.Conv2d(
-        in_shape[2], out_shape3, kernel_size=3, stride=1, padding=1, bias=False, groups=groups
+        in_shape[2],
+        out_shape3,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        bias=False,
+        groups=groups,
     )
     if len(in_shape) >= 4:
         scratch.layer4_rn = nn.Conv2d(
-            in_shape[3], out_shape4, kernel_size=3, stride=1, padding=1, bias=False, groups=groups
+            in_shape[3],
+            out_shape4,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+            groups=groups,
         )
 
     return scratch
 
 
 class Interpolate(nn.Module):
-    """Interpolation module.
-    """
+    """Interpolation module."""
 
     def __init__(self, scale_factor, mode, align_corners=False):
         """Init.
@@ -122,15 +154,17 @@ class Interpolate(nn.Module):
         """
 
         x = self.interp(
-            x, scale_factor=self.scale_factor, mode=self.mode, align_corners=self.align_corners
+            x,
+            scale_factor=self.scale_factor,
+            mode=self.mode,
+            align_corners=self.align_corners,
         )
 
         return x
 
 
 class ResidualConvUnit_custom(nn.Module):
-    """Residual convolution module.
-    """
+    """Residual convolution module."""
 
     def __init__(self, features, activation, bn):
         """Init.
@@ -145,11 +179,23 @@ class ResidualConvUnit_custom(nn.Module):
         self.groups = 1
 
         self.conv1 = nn.Conv2d(
-            features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups
+            features,
+            features,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=True,
+            groups=self.groups,
         )
 
         self.conv2 = nn.Conv2d(
-            features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups
+            features,
+            features,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=True,
+            groups=self.groups,
         )
 
         if self.bn == True:
@@ -189,10 +235,18 @@ class ResidualConvUnit_custom(nn.Module):
 
 
 class FeatureFusionBlock_custom(nn.Module):
-    """Feature fusion block.
-    """
+    """Feature fusion block."""
 
-    def __init__(self, features, activation, deconv=False, bn=False, expand=False, align_corners=True, size=None):
+    def __init__(
+        self,
+        features,
+        activation,
+        deconv=False,
+        bn=False,
+        expand=False,
+        align_corners=True,
+        size=None,
+    ):
         """Init.
 
         Args:
@@ -210,7 +264,15 @@ class FeatureFusionBlock_custom(nn.Module):
         if self.expand == True:
             out_features = features // 2
 
-        self.out_conv = nn.Conv2d(features, out_features, kernel_size=1, stride=1, padding=0, bias=True, groups=1)
+        self.out_conv = nn.Conv2d(
+            features,
+            out_features,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=True,
+            groups=1,
+        )
 
         self.resConfUnit1 = ResidualConvUnit_custom(features, activation, bn)
         self.resConfUnit2 = ResidualConvUnit_custom(features, activation, bn)
@@ -264,11 +326,7 @@ def forward_levit(pretrained, x):
     return layer_1, layer_2, layer_3
 
 
-def _make_levit_backbone(
-        model,
-        hooks=[3, 11, 21],
-        patch_grid=[14, 14]
-):
+def _make_levit_backbone(model, hooks=[3, 11, 21], patch_grid=[14, 14]):
     pretrained = nn.Module()
 
     pretrained.model = model
@@ -281,16 +339,19 @@ def _make_levit_backbone(
     patch_grid_size = np.array(patch_grid, dtype=int)
 
     pretrained.act_postprocess1 = nn.Sequential(
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size(patch_grid_size.tolist()))
+        Transpose(1, 2), nn.Unflatten(2, torch.Size(patch_grid_size.tolist()))
     )
     pretrained.act_postprocess2 = nn.Sequential(
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size((np.ceil(patch_grid_size / 2).astype(int)).tolist()))
+        nn.Unflatten(
+            2, torch.Size((np.ceil(patch_grid_size / 2).astype(int)).tolist())
+        ),
     )
     pretrained.act_postprocess3 = nn.Sequential(
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size((np.ceil(patch_grid_size / 4).astype(int)).tolist()))
+        nn.Unflatten(
+            2, torch.Size((np.ceil(patch_grid_size / 4).astype(int)).tolist())
+        ),
     )
 
     return pretrained
@@ -304,12 +365,24 @@ class ConvTransposeNorm(nn.Sequential):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=1, stride=1, pad=0, dilation=1,
-            groups=1, bn_weight_init=1):
+        self,
+        in_chs,
+        out_chs,
+        kernel_size=1,
+        stride=1,
+        pad=0,
+        dilation=1,
+        groups=1,
+        bn_weight_init=1,
+    ):
         super().__init__()
-        self.add_module('c',
-                        nn.ConvTranspose2d(in_chs, out_chs, kernel_size, stride, pad, dilation, groups, bias=False))
-        self.add_module('bn', nn.BatchNorm2d(out_chs))
+        self.add_module(
+            "c",
+            nn.ConvTranspose2d(
+                in_chs, out_chs, kernel_size, stride, pad, dilation, groups, bias=False
+            ),
+        )
+        self.add_module("bn", nn.BatchNorm2d(out_chs))
 
         nn.init.constant_(self.bn.weight, bn_weight_init)
 
@@ -320,8 +393,14 @@ class ConvTransposeNorm(nn.Sequential):
         w = c.weight * w[:, None, None, None]
         b = bn.bias - bn.running_mean * bn.weight / (bn.running_var + bn.eps) ** 0.5
         m = nn.ConvTranspose2d(
-            w.size(1), w.size(0), w.shape[2:], stride=self.c.stride,
-            padding=self.c.padding, dilation=self.c.dilation, groups=self.c.groups)
+            w.size(1),
+            w.size(0),
+            w.shape[2:],
+            stride=self.c.stride,
+            padding=self.c.padding,
+            dilation=self.c.dilation,
+            groups=self.c.groups,
+        )
         m.weight.data.copy_(w)
         m.bias.data.copy_(b)
         return m
@@ -337,17 +416,15 @@ def stem_b4_transpose(in_chs, out_chs, activation):
         ConvTransposeNorm(in_chs, out_chs, 3, 2, 1),
         activation(),
         ConvTransposeNorm(out_chs, out_chs // 2, 3, 2, 1),
-        activation())
+        activation(),
+    )
 
 
 def _make_pretrained_levit_384(pretrained, hooks=None):
     model = timm.create_model("levit_384", pretrained=pretrained)
 
     hooks = [3, 11, 21] if hooks == None else hooks
-    return _make_levit_backbone(
-        model,
-        hooks=hooks
-    )
+    return _make_levit_backbone(model, hooks=hooks)
 
 
 def _make_fusion_block(features, use_bn, size=None):
@@ -364,16 +441,15 @@ def _make_fusion_block(features, use_bn, size=None):
 
 class DPT(BaseModel):
     def __init__(
-            self,
-            head,
-            features=256,
-            backbone="vitb_rn50_384",
-            readout="project",
-            channels_last=False,
-            use_bn=False,
-            **kwargs
+        self,
+        head,
+        features=256,
+        backbone="vitb_rn50_384",
+        readout="project",
+        channels_last=False,
+        use_bn=False,
+        **kwargs,
     ):
-
         super(DPT, self).__init__()
 
         self.channels_last = channels_last
@@ -384,7 +460,12 @@ class DPT(BaseModel):
             "beitl16_512": [5, 11, 17, 23],
             "beitl16_384": [5, 11, 17, 23],
             "beitb16_384": [2, 5, 8, 11],
-            "swin2l24_384": [1, 1, 17, 1],  # Allowed ranges: [0, 1], [0,  1], [ 0, 17], [ 0,  1]
+            "swin2l24_384": [
+                1,
+                1,
+                17,
+                1,
+            ],  # Allowed ranges: [0, 1], [0,  1], [ 0, 17], [ 0,  1]
             "swin2b24_384": [1, 1, 17, 1],  # [0, 1], [0,  1], [ 0, 17], [ 0,  1]
             "swin2t16_256": [1, 1, 5, 1],  # [0, 1], [0,  1], [ 0,  5], [ 0,  1]
             "swinl12_384": [1, 1, 17, 1],  # [0, 1], [0,  1], [ 0, 17], [ 0,  1]
@@ -420,7 +501,9 @@ class DPT(BaseModel):
 
         self.forward_transformer = forward_levit
         size_refinenet3 = 7
-        self.scratch.stem_transpose = stem_b4_transpose(256, 128, get_act_layer("hard_swish"))
+        self.scratch.stem_transpose = stem_b4_transpose(
+            256, 128, get_act_layer("hard_swish")
+        )
 
         self.scratch.refinenet1 = _make_fusion_block(features, use_bn)
         self.scratch.refinenet2 = _make_fusion_block(features, use_bn)
@@ -475,7 +558,9 @@ class DPT(BaseModel):
             path_3 = self.scratch.refinenet3(layer_3_rn, size=layer_2_rn.shape[2:])
         else:
             path_4 = self.scratch.refinenet4(layer_4_rn, size=layer_3_rn.shape[2:])
-            path_3 = self.scratch.refinenet3(path_4, layer_3_rn, size=layer_2_rn.shape[2:])
+            path_3 = self.scratch.refinenet3(
+                path_4, layer_3_rn, size=layer_2_rn.shape[2:]
+            )
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn, size=layer_1_rn.shape[2:])
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
 
@@ -490,15 +575,31 @@ class DPT(BaseModel):
 class DPTDepthModel(DPT):
     def __init__(self, path=None, non_negative=True, **kwargs):
         features = kwargs["features"] if "features" in kwargs else 256
-        head_features_1 = kwargs["head_features_1"] if "head_features_1" in kwargs else features
-        head_features_2 = kwargs["head_features_2"] if "head_features_2" in kwargs else 32
+        head_features_1 = (
+            kwargs["head_features_1"] if "head_features_1" in kwargs else features
+        )
+        head_features_2 = (
+            kwargs["head_features_2"] if "head_features_2" in kwargs else 32
+        )
         kwargs.pop("head_features_1", None)
         kwargs.pop("head_features_2", None)
 
         head = nn.Sequential(
-            nn.Conv2d(head_features_1, head_features_1 // 2, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(
+                head_features_1,
+                head_features_1 // 2,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-            nn.Conv2d(head_features_1 // 2, head_features_2, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(
+                head_features_1 // 2,
+                head_features_2,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),
             nn.ReLU(True),
             nn.Conv2d(head_features_2, 1, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True) if non_negative else nn.Identity(),
@@ -518,11 +619,10 @@ class DPTDepthModel(DPT):
 
 
 class MIDASFeaturizer(nn.Module):
-
     def __init__(self, output_root):
         super().__init__()
         self.model = DPTDepthModel(
-            path=os.path.join(output_root, 'models/dpt_levit_224.pt'),
+            path=os.path.join(output_root, "models/dpt_levit_224.pt"),
             backbone="levit_384",
             non_negative=True,
             head_features_1=64,
@@ -539,7 +639,7 @@ class MIDASFeaturizer(nn.Module):
 
 if __name__ == "__main__":
     DPTDepthModel(
-        path='../../models/dpt_levit_224.pt',
+        path="../../models/dpt_levit_224.pt",
         backbone="levit_384",
         non_negative=True,
         head_features_1=64,
@@ -550,12 +650,14 @@ if __name__ == "__main__":
 
     input_size = 224
 
-    transform = T.Compose([
-        T.Resize(input_size),
-        T.CenterCrop(input_size),
-        T.ToTensor(),
-        T.Normalize([0.5] * 3, [0.5] * 3)
-    ])
+    transform = v2.Compose(
+        [
+            v2.Resize(input_size),
+            v2.CenterCrop(input_size),
+            v2.ToTensor(),
+            v2.Normalize([0.5] * 3, [0.5] * 3),
+        ]
+    )
 
     t_img = transform(image).unsqueeze(0).cuda()
 

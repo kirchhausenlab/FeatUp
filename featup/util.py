@@ -1,16 +1,15 @@
 import matplotlib.pyplot as plt
 import torch
-import torchvision.transforms as T
+
 import numpy as np
 from sklearn.decomposition import PCA
 import torch.nn.functional as F
 from collections import defaultdict, deque
-import torch
 import torch.nn as nn
+from torchvision.transforms import v2
 
 
 class RollingAvg:
-
     def __init__(self, length):
         self.length = length
         self.metrics = defaultdict(lambda: deque(maxlen=self.length))
@@ -58,10 +57,10 @@ class UnNormalize(object):
         return image2.permute(1, 0, 2, 3)
 
 
-norm = T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+norm = v2.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 unnorm = UnNormalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
-midas_norm = T.Normalize([0.5] * 3, [0.5] * 3)
+midas_norm = v2.Normalize([0.5] * 3, [0.5] * 3)
 midas_unnorm = UnNormalize([0.5] * 3, [0.5] * 3)
 
 
@@ -70,15 +69,17 @@ class ToTargetTensor(object):
         return torch.as_tensor(np.array(target), dtype=torch.int64).unsqueeze(0)
 
 
-def show_heatmap(ax,
-                 image,
-                 heatmap,
-                 cmap="bwr",
-                 color=False,
-                 center=False,
-                 show_negative=False,
-                 cax=None,
-                 vmax=None):
+def show_heatmap(
+    ax,
+    image,
+    heatmap,
+    cmap="bwr",
+    color=False,
+    center=False,
+    show_negative=False,
+    cax=None,
+    vmax=None,
+):
     frame = []
 
     if color:
@@ -94,15 +95,20 @@ def show_heatmap(ax,
     if not show_negative:
         heatmap = heatmap.clamp_min(0)
 
-    heatmap = F.interpolate(heatmap.unsqueeze(0).unsqueeze(0), (image.shape[0], image.shape[1])) \
-        .squeeze(0).squeeze(0)
+    heatmap = (
+        F.interpolate(
+            heatmap.unsqueeze(0).unsqueeze(0), (image.shape[0], image.shape[1])
+        )
+        .squeeze(0)
+        .squeeze(0)
+    )
 
     if vmax is None:
         vmax = np.abs(heatmap).max()
 
-    hm = ax.imshow(heatmap, alpha=.5, cmap=cmap, vmax=vmax, vmin=-vmax)
+    hm = ax.imshow(heatmap, alpha=0.5, cmap=cmap, vmax=vmax, vmin=-vmax)
     if cax is not None:
-        plt.colorbar(hm, cax=cax, orientation='vertical')
+        plt.colorbar(hm, cax=cax, orientation="vertical")
 
     frame.extend([hm])
     return frame
@@ -111,7 +117,9 @@ def show_heatmap(ax,
 def implicit_feats(original_image, input_size, color_feats):
     n_freqs = 20
     grid = torch.linspace(-1, 1, input_size, device=original_image.device)
-    feats = torch.cat([t.unsqueeze(0) for t in torch.meshgrid([grid, grid])]).unsqueeze(0)
+    feats = torch.cat([t.unsqueeze(0) for t in torch.meshgrid([grid, grid])]).unsqueeze(
+        0
+    )
 
     if color_feats:
         feat_list = [feats, original_image]
@@ -121,8 +129,9 @@ def implicit_feats(original_image, input_size, color_feats):
         dim_multiplier = 2
 
     feats = torch.cat(feat_list, dim=1)
-    freqs = torch.exp(torch.linspace(-2, 10, n_freqs, device=original_image.device)) \
-        .reshape(n_freqs, 1, 1, 1)
+    freqs = torch.exp(
+        torch.linspace(-2, 10, n_freqs, device=original_image.device)
+    ).reshape(n_freqs, 1, 1, 1)
     feats = (feats * freqs).reshape(1, n_freqs * dim_multiplier, input_size, input_size)
 
     if color_feats:
@@ -153,14 +162,15 @@ def generate_subset(n, batch):
 
 
 class TorchPCA(object):
-
     def __init__(self, n_components):
         self.n_components = n_components
 
     def fit(self, X):
         self.mean_ = X.mean(dim=0)
         unbiased = X - self.mean_.unsqueeze(0)
-        U, S, V = torch.pca_lowrank(unbiased, q=self.n_components, center=False, niter=4)
+        U, S, V = torch.pca_lowrank(
+            unbiased, q=self.n_components, center=False, niter=4
+        )
         self.components_ = V.T
         self.singular_values_ = S
         return self
@@ -178,7 +188,13 @@ def pca(image_feats_list, dim=3, fit_pca=None, use_torch_pca=True, max_samples=N
         if target_size is not None and fit_pca is None:
             tensor = F.interpolate(tensor, (target_size, target_size), mode="bilinear")
         B, C, H, W = tensor.shape
-        return tensor.permute(1, 0, 2, 3).reshape(C, B * H * W).permute(1, 0).detach().cpu()
+        return (
+            tensor.permute(1, 0, 2, 3)
+            .reshape(C, B * H * W)
+            .permute(1, 0)
+            .detach()
+            .cpu()
+        )
 
     if len(image_feats_list) > 1 and fit_pca is None:
         target_size = image_feats_list[0].shape[2]
@@ -215,7 +231,6 @@ def pca(image_feats_list, dim=3, fit_pca=None, use_torch_pca=True, max_samples=N
 
 
 class PCAUnprojector(nn.Module):
-
     def __init__(self, feats, dim, device, use_torch_pca=False, **kwargs):
         super().__init__()
         self.dim = dim
@@ -230,15 +245,26 @@ class PCAUnprojector(nn.Module):
                 sklearn_pca = pca([feats], dim=dim, use_torch_pca=use_torch_pca)[1]
 
                 # Register tensors as buffers
-                self.register_buffer('components_',
-                                     torch.tensor(sklearn_pca.components_, device=device, dtype=feats.dtype))
-                self.register_buffer('singular_values_',
-                                     torch.tensor(sklearn_pca.singular_values_, device=device, dtype=feats.dtype))
-                self.register_buffer('mean_', torch.tensor(sklearn_pca.mean_, device=device, dtype=feats.dtype))
+                self.register_buffer(
+                    "components_",
+                    torch.tensor(
+                        sklearn_pca.components_, device=device, dtype=feats.dtype
+                    ),
+                )
+                self.register_buffer(
+                    "singular_values_",
+                    torch.tensor(
+                        sklearn_pca.singular_values_, device=device, dtype=feats.dtype
+                    ),
+                )
+                self.register_buffer(
+                    "mean_",
+                    torch.tensor(sklearn_pca.mean_, device=device, dtype=feats.dtype),
+                )
             else:
-                self.register_buffer('components_', kwargs["components_"].t())
-                self.register_buffer('singular_values_', kwargs["singular_values_"])
-                self.register_buffer('mean_', kwargs["mean_"])
+                self.register_buffer("components_", kwargs["components_"].t())
+                self.register_buffer("singular_values_", kwargs["singular_values_"])
+                self.register_buffer("mean_", kwargs["mean_"])
 
         else:
             print("PCAUnprojector will not transform data")
@@ -249,7 +275,9 @@ class PCAUnprojector(nn.Module):
         else:
             b, c, h, w = red_feats.shape
             red_feats_reshaped = red_feats.permute(0, 2, 3, 1).reshape(b * h * w, c)
-            unprojected = (red_feats_reshaped @ self.components_) + self.mean_.unsqueeze(0)
+            unprojected = (
+                red_feats_reshaped @ self.components_
+            ) + self.mean_.unsqueeze(0)
             return unprojected.reshape(b, h, w, self.original_dim).permute(0, 3, 1, 2)
 
     def project(self, feats):

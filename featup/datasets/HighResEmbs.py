@@ -6,9 +6,8 @@ import featup.downsamplers
 import numpy as np
 import torch
 import torch.nn.functional as F
-import torchvision.transforms as T
+from torchvision.transforms import v2
 from featup.featurizers.util import get_featurizer
-from featup.layers import ChannelNorm
 from featup.layers import ChannelNorm
 from featup.util import norm
 from sklearn.decomposition import PCA
@@ -19,13 +18,13 @@ from tqdm import tqdm
 
 from util import get_dataset
 
-torch.multiprocessing.set_sharing_strategy('file_system')
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def clamp_mag(t, min_mag, max_mag):
     mags = mag(t)
-    clamped_above = t * (max_mag / mags.clamp_min(.000001)).clamp_max(1.0)
-    clamped_below = clamped_above * (min_mag / mags.clamp_min(.000001)).clamp_min(1.0)
+    clamped_above = t * (max_mag / mags.clamp_min(0.000001)).clamp_max(1.0)
+    clamped_below = clamped_above * (min_mag / mags.clamp_min(0.000001)).clamp_min(1.0)
     return clamped_below
 
 
@@ -36,7 +35,9 @@ def pca(image_feats_list, dim=3, fit_pca=None):
         if target_size is not None and fit_pca is None:
             F.interpolate(tensor, (target_size, target_size), mode="bilinear")
         B, C, H, W = tensor.shape
-        return feats.permute(1, 0, 2, 3).reshape(C, B * H * W).permute(1, 0).detach().cpu()
+        return (
+            feats.permute(1, 0, 2, 3).reshape(C, B * H * W).permute(1, 0).detach().cpu()
+        )
 
     if len(image_feats_list) > 1 and fit_pca is None:
         target_size = image_feats_list[0].shape[2]
@@ -73,7 +74,9 @@ def model_collate(batch):
         return batch
     elif isinstance(elem, collections.abc.Mapping):
         try:
-            return elem_type({key: model_collate([d[key] for d in batch]) for key in elem})
+            return elem_type(
+                {key: model_collate([d[key] for d in batch]) for key in elem}
+            )
         except TypeError:
             # The mapping type may not support `__init__(iterable)`.
             return {key: model_collate([d[key] for d in batch]) for key in elem}
@@ -82,25 +85,37 @@ def model_collate(batch):
 
 
 class HighResEmbHelper(Dataset):
-    def __init__(self,
-                 root,
-                 output_root,
-                 dataset_name,
-                 emb_name,
-                 split,
-                 model_type,
-                 transform,
-                 target_transform,
-                 limit,
-                 include_labels):
+    def __init__(
+        self,
+        root,
+        output_root,
+        dataset_name,
+        emb_name,
+        split,
+        model_type,
+        transform,
+        target_transform,
+        limit,
+        include_labels,
+    ):
         self.root = root
-        self.emb_dir = join(output_root, "feats", emb_name, dataset_name, split, model_type)
+        self.emb_dir = join(
+            output_root, "feats", emb_name, dataset_name, split, model_type
+        )
 
         self.dataset = get_dataset(
-            root, dataset_name, split, transform, target_transform, include_labels=include_labels)
+            root,
+            dataset_name,
+            split,
+            transform,
+            target_transform,
+            include_labels=include_labels,
+        )
 
-        if split == 'train':
-            self.dataset = Subset(self.dataset, generate_subset(len(self.dataset), 5000))
+        if split == "train":
+            self.dataset = Subset(
+                self.dataset, generate_subset(len(self.dataset), 5000)
+            )
             # TODO factor this limit out
 
         if limit is not None:
@@ -111,10 +126,14 @@ class HighResEmbHelper(Dataset):
 
     def __getitem__(self, item):
         batch = self.dataset[item]
-        output_location = join(self.emb_dir, "/".join(batch["img_path"].split("/")[-1:]).replace(".jpg", ".pth"))
+        output_location = join(
+            self.emb_dir,
+            "/".join(batch["img_path"].split("/")[-1:]).replace(".jpg", ".pth"),
+        )
         state_dicts = torch.load(output_location, map_location="cpu")
         from featup.train_implicit_upsampler import get_implicit_upsampler
         from featup.util import PCAUnprojector
+
         model = get_implicit_upsampler(**state_dicts["model_args"])
         model.load_state_dict(state_dicts["model"])
         unp_state_dict = state_dicts["unprojector"]
@@ -123,7 +142,7 @@ class HighResEmbHelper(Dataset):
             unp_state_dict["components_"].shape[0],
             device="cpu",
             original_dim=unp_state_dict["components_"].shape[1],
-            **unp_state_dict
+            **unp_state_dict,
         )
         batch["model"] = {"model": model, "unprojector": unprojector}
         return batch
@@ -140,25 +159,27 @@ def load_hr_emb(image, loaded_model, target_res):
 
     with torch.no_grad():
         original_image = F.interpolate(
-            image, size=(target_res, target_res), mode='bilinear', antialias=True)
+            image, size=(target_res, target_res), mode="bilinear", antialias=True
+        )
         hr_feats = hr_model(original_image)
         return unprojector(hr_feats.detach().cpu())
 
 
 class HighResEmb(Dataset):
-    def __init__(self,
-                 root,
-                 dataset_name,
-                 emb_name,
-                 split,
-                 output_root,
-                 model_type,
-                 transform,
-                 target_transform,
-                 target_res,
-                 limit,
-                 include_labels,
-                 ):
+    def __init__(
+        self,
+        root,
+        dataset_name,
+        emb_name,
+        split,
+        output_root,
+        model_type,
+        transform,
+        target_transform,
+        target_res,
+        limit,
+        include_labels,
+    ):
         self.root = root
         self.dataset = HighResEmbHelper(
             root=root,
@@ -170,15 +191,24 @@ class HighResEmb(Dataset):
             transform=transform,
             target_transform=target_transform,
             limit=limit,
-            include_labels=include_labels)
+            include_labels=include_labels,
+        )
 
         self.all_hr_feats = []
         self.target_res = target_res
-        loader = DataLoader(self.dataset, shuffle=False, batch_size=1, num_workers=12, collate_fn=model_collate)
+        loader = DataLoader(
+            self.dataset,
+            shuffle=False,
+            batch_size=1,
+            num_workers=12,
+            collate_fn=model_collate,
+        )
 
         for img_num, batch in enumerate(tqdm(loader, "Loading hr embeddings")):
             with torch.no_grad():
-                self.all_hr_feats.append(load_hr_emb(batch["img"], batch["model"], target_res))
+                self.all_hr_feats.append(
+                    load_hr_emb(batch["img"], batch["model"], target_res)
+                )
 
     def __len__(self):
         return len(self.dataset)
@@ -194,24 +224,22 @@ def generate_subset(n, batch):
     return np.random.permutation(n)[:batch]
 
 
-def load_some_hr_feats(model_type,
-                       activation_type,
-                       dataset_name,
-                       split,
-                       emb_name,
-                       root,
-                       output_root,
-                       input_size,
-                       samples_per_batch,
-                       num_batches,
-                       num_workers
-                       ):
-    transform = T.Compose([
-        T.Resize(input_size),
-        T.CenterCrop(input_size),
-        T.ToTensor(),
-        norm
-    ])
+def load_some_hr_feats(
+    model_type,
+    activation_type,
+    dataset_name,
+    split,
+    emb_name,
+    root,
+    output_root,
+    input_size,
+    samples_per_batch,
+    num_batches,
+    num_workers,
+):
+    transform = v2.Compose(
+        [v2.Resize(input_size), v2.CenterCrop(input_size), v2.ToTensor(), norm]
+    )
 
     shared_args = dict(
         root=root,
@@ -223,7 +251,7 @@ def load_some_hr_feats(model_type,
         target_transform=None,
         target_res=input_size,
         include_labels=False,
-        limit=samples_per_batch * num_batches
+        limit=samples_per_batch * num_batches,
     )
 
     def get_data(model, ds):
@@ -262,7 +290,7 @@ if __name__ == "__main__":
         224,
         50,
         3,
-        0
+        0,
     )
 
     print(loaded)
