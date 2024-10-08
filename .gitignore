@@ -1,4 +1,5 @@
 .DS_Store
+test_images
 visuals
 *.mp4
 .venv
