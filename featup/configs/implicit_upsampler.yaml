@@ -16,7 +16,7 @@ total_partitions: 1
 
 # Model Args
 # changing model_type to cell_interactome_dinvo2
-model_type: "cell_interactome_dinvo2"
+model_type: "ci_dinov2"
 activation_type: "token"
 
 # Upsampler args
@@ -46,32 +46,63 @@ hydra:
     dir: "."
   output_subdir: ~
 
-featup:
-  upsampler:
-    type: jbu_stack
-    use_norm: true
-    weights: ${weights_path}/featup/jbu_stack_norm.ckpt
-
 
 model:
   # weights: ${weights_path}/pretrained/dinov2_vitg14_reg4_pretrain_ckpt.pth
-  weights: ""
+  weights: ${weights_path}/pretrain_scratch_featup/ckpt_step_136999.pth
   dino:
     freeze_head: false
   ibot:
     freeze_head: false
     separate_head: false
   student:
-    freeze_backbone: false
+    freeze_backbone: true
+    arch: vit_giant2
+    patch_size: 14
+    drop_path_rate: 0.4
+    layerscale: 1.0e-05
+    drop_path_uniform: true
+    qkv_bias: true
+    proj_bias: true
+    ffn_bias: true
+    ffn_layer: swiglufused
+    num_register_tokens: 4
+    block_chunks: 0
+    interpolate_antialias: false
+    interpolate_offset: 0.1
+  crops:
+    global_crops_scale:
+      - 0.32
+      - 1.0
+    local_crops_number: 8
+    local_crops_scale:
+      - 0.05
+      - 0.32
+    global_crops_size: 518
+    local_crops_size: 98
+
+featup:
+  upsampler:
+    type: jbu_stack
+    use_norm: true
+
+train:
+  resume: true
+  dataset_path: ${base_path}/care_llsm_518
+  path_to_txt: ${train.dataset_path}/train.txt
+  output_dir: ${weights_path}/${logging.wandb_config.name}
+  search_suffix: ${search_suffix}
+  max_files: 1000000
+  num_workers: 175
+  log_interval: 10
+  load_optim: true
+
+student:
+  arch: vit_large
+  patch_size: 8
 
 
-crops:
-  global_crops_scale:
-    - 0.32
-    - 1.0
-  local_crops_number: 8
-  local_crops_scale:
-    - 0.05
-    - 0.32
-  global_crops_size: 518
-  local_crops_size: 98
+seed: 0
+device: cuda
+TARGET_FILE_EXTENSION: ".pth"
+search_suffix: "2D/**/*${TARGET_FILE_EXTENSION}"

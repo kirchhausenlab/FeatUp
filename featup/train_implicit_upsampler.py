@@ -3,7 +3,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from os.path import join, dirname
-
+from pathlib import Path
 import hydra
 import matplotlib.pyplot as plt
 import torch
@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter  # type: ignore
 from torchmetrics.functional.regression import explained_variance
 from tqdm import tqdm
-
+from cell_interactome.data.dinov2.dataset import CellDataset2D
 from featup.datasets.JitteredImage import JitteredImage, apply_jitter
 from featup.datasets.util import get_dataset, SlicedDataset
 from featup.downsamplers import SimpleDownsampler, AttentionDownsampler
@@ -33,6 +33,12 @@ from featup.util import (
     pca,
     PCAUnprojector,
     prep_image,
+)
+
+from cell_interactome.data.dinov2 import (
+    collate_data_and_cast,
+    DataAugmentationDINO,
+    MaskingGenerator,
 )
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -108,7 +114,7 @@ def my_app(cfg: DictConfig) -> None:
         kernel_size = 35
         featurize_batch_size = 16
         steps = 500
-    elif cfg.model_type == "cell_interacome_dinov2":
+    elif cfg.model_type == "ci_dinov2":
         multiplier = 1
         featurize_batch_size = 8  # for smaller crops, sticking to batch of 8
         kernel_size = 29
@@ -139,6 +145,8 @@ def my_app(cfg: DictConfig) -> None:
         cfg.split,
         cfg.model_type,
     )
+
+    print(str(cfg.model_type))
 
     model, _, dim = get_featurizer(
         cfg.model_type,
@@ -173,15 +181,45 @@ def my_app(cfg: DictConfig) -> None:
         ]
     )
 
-    full_dataset = get_dataset(
-        dataroot=cfg.pytorch_data_dir,
-        name=cfg.dataset,
-        split=cfg.split,
-        transform=transform,
-        target_transform=None,
-        include_labels=False,
+    # full_dataset = get_dataset(
+    #     dataroot=cfg.pytorch_data_dir,
+    #     name=cfg.dataset,
+    #     split=cfg.split,
+    #     transform=transform,
+    #     target_transform=None,
+    #     include_labels=False,
+    # )
+
+    ###  IMAGERECOG setup data preprocessing
+    model.train()
+    inputs_dtype = torch.half
+    fp16_scaler = model.fp16_scaler  # for mixed precision training
+
+    # setup data preprocessing
+
+    img_size = cfg.model.crops.global_crops_size
+    patch_size = cfg.model.student.patch_size
+    n_tokens = (img_size // patch_size) ** 2
+    mask_generator = MaskingGenerator(
+        input_size=(img_size // patch_size, img_size // patch_size),
+        max_num_patches=0.5 * img_size // patch_size * img_size // patch_size,
     )
 
+    data_transform = DataAugmentationDINO(
+        cfg.model.crops.global_crops_scale,
+        cfg.model.crops.local_crops_scale,
+        cfg.model.crops.local_crops_number,
+        global_crops_size=cfg.model.crops.global_crops_size,
+        local_crops_size=cfg.model.crops.local_crops_size,
+    )
+    full_dataset = CellDataset2D(
+        base_data_dir=Path(cfg.train.dataset_path),
+        path_to_txt=Path(cfg.train.path_to_txt),
+        search_suffix=cfg.train.search_suffix,
+        max_files=cfg.train.max_files,
+        transform=data_transform,
+    )
+    ###  IMAGERECOG setup data preprocessing
     if "sample" in cfg.dataset:
         partition_size = 1
         dataset = full_dataset

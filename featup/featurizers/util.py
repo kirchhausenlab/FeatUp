@@ -83,12 +83,14 @@ def get_featurizer(name, activation_type="key", **kwargs):
         model = DeepLabV3Featurizer(model)
         patch_size = 1
         dim = 2048
-    elif name == "cell_interactome_dinvo2":
-        from src.third_party.FeatUp.featup.featurizers.DINOv2 import (
+    elif name == "ci_dinov2":
+        from featup.featurizers.DINOv2 import (
             CellInteractomeDinoV2Featurizer,
         )
 
         cfg = kwargs["cfg"]
+        if cfg is None:
+            raise ValueError("cfg is required for cell_interactome_dinov2")
         # look at checkpoint for patch size. patch size can be 8, 14, 16
         patch_size = 8
         model = CellInteractomeDinoV2Featurizer(cfg)
