@@ -84,13 +84,15 @@ def get_featurizer(name, activation_type="key", **kwargs):
         patch_size = 1
         dim = 2048
     elif name == "cell_interactome_dinvo2":
-        from src.cell_interactome.models.dinov2.vision_transformer.layers import (
-            vit_base,
+        from src.third_party.FeatUp.featup.featurizers.DINOv2 import (
+            CellInteractomeDinoV2Featurizer,
         )
 
-        model = vit_base()
-        patch_size = 16
-        dim = 768
+        cfg = kwargs["cfg"]
+        # look at checkpoint for patch size. patch size can be 8, 14, 16
+        patch_size = 8
+        model = CellInteractomeDinoV2Featurizer(cfg)
+        dim = 384
     else:
         raise ValueError("unknown model: {}".format(name))
     return model, patch_size, dim

@@ -1,3 +1,6 @@
+base_path: /nfs/scratch2/shared_image_recog_ml
+weights_path: ${base_path}/weights/dinov2
+
 # Environment Args
 output_root: '../../'
 pytorch_data_dir: '/pytorch-data'
@@ -43,3 +46,20 @@ hydra:
     dir: "."
   output_subdir: ~
 
+featup:
+  upsampler:
+    type: jbu_stack
+    use_norm: true
+    weights: ${weights_path}/featup/jbu_stack_norm.ckpt
+
+
+model:
+  # weights: ${weights_path}/pretrained/dinov2_vitg14_reg4_pretrain_ckpt.pth
+  weights: ""
+  dino:
+    freeze_head: false
+  ibot:
+    freeze_head: false
+    separate_head: false
+  student:
+    freeze_backbone: false

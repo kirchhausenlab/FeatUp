@@ -108,6 +108,11 @@ def my_app(cfg: DictConfig) -> None:
         kernel_size = 35
         featurize_batch_size = 16
         steps = 500
+    elif cfg.model_type == "cell_interacome_dinov2":
+        multiplier = 1
+        featurize_batch_size = 8  # for smaller crops, sticking to batch of 8
+        kernel_size = 29
+        final_size = 16
     else:
         raise ValueError(f"Unknown model type {cfg.model_type}")
 
@@ -136,10 +141,13 @@ def my_app(cfg: DictConfig) -> None:
     )
 
     model, _, dim = get_featurizer(
-        cfg.model_type, activation_type=cfg.activation_type, output_root=cfg.output_root
+        cfg.model_type,
+        activation_type=cfg.activation_type,
+        output_root=cfg.output_root,
+        cfg=cfg,  # additional parameter for cell interactome
     )
 
-    if cfg.use_norm:
+    if cfg.use_norm:  # not needed for cell interactome
         model = torch.nn.Sequential(model, ChannelNorm(dim))
 
     model = model.cuda()
