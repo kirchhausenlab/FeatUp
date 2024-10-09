@@ -26,7 +26,7 @@ blur_attn: True
 mag_tv_weight: 0.05
 mag_weight: 0.001
 color_feats: true
-pca_batch: 50
+pca_batch: 25 # reduced from 50
 proj_dim: 128
 max_pad: 30
 use_flips: true
@@ -94,7 +94,7 @@ train:
   output_dir: ${weights_path}/${logging.wandb_config.name}
   search_suffix: ${search_suffix}
   max_files: 1000000
-  num_workers: 175
+  num_workers: 50 # reduced from 175
   log_interval: 10
   load_optim: true
 

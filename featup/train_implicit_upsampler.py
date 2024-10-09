@@ -83,9 +83,9 @@ def my_app(cfg: DictConfig) -> None:
     print(cfg.output_root)
     seed_everything(0)
 
-    input_size_h = 224
-    input_size_w = 224
-    final_size = 14
+    input_size_h = 518
+    input_size_w = 518
+    final_size = 8
     redo = False
 
     steps = cfg.steps
@@ -192,8 +192,8 @@ def my_app(cfg: DictConfig) -> None:
 
     ###  IMAGERECOG setup data preprocessing
     model.train()
-    inputs_dtype = torch.half
-    fp16_scaler = model.fp16_scaler  # for mixed precision training
+    # inputs_dtype = torch.half
+    # fp16_scaler = model.fp16_scaler  # for mixed precision training
 
     # setup data preprocessing
 
@@ -205,19 +205,12 @@ def my_app(cfg: DictConfig) -> None:
         max_num_patches=0.5 * img_size // patch_size * img_size // patch_size,
     )
 
-    data_transform = DataAugmentationDINO(
-        cfg.model.crops.global_crops_scale,
-        cfg.model.crops.local_crops_scale,
-        cfg.model.crops.local_crops_number,
-        global_crops_size=cfg.model.crops.global_crops_size,
-        local_crops_size=cfg.model.crops.local_crops_size,
-    )
     full_dataset = CellDataset2D(
         base_data_dir=Path(cfg.train.dataset_path),
         path_to_txt=Path(cfg.train.path_to_txt),
         search_suffix=cfg.train.search_suffix,
         max_files=cfg.train.max_files,
-        transform=data_transform,
+        transform=transform,
     )
     ###  IMAGERECOG setup data preprocessing
     if "sample" in cfg.dataset:
@@ -228,7 +221,8 @@ def my_app(cfg: DictConfig) -> None:
             full_dataset = full_dataset
         elif cfg.split == "train":
             full_dataset = Subset(
-                full_dataset, generate_subset(len(full_dataset), 5000)
+                full_dataset,
+                generate_subset(len(full_dataset), 5000),
             )
         else:
             raise ValueError(f"Unknown dataset {cfg.dataset}")
@@ -243,10 +237,10 @@ def my_app(cfg: DictConfig) -> None:
     loader = DataLoader(dataset, shuffle=False)
 
     for img_num, batch in enumerate(loader):
-        original_image = batch["img"].cuda()
+        original_image = batch["image"].cuda()
         output_location = join(
             feat_dir,
-            "/".join(batch["img_path"][0].split("/")[-1:]).replace(".jpg", ".pth"),
+            Path(batch["metadata"]["pth_path"][0]).name,
         )
 
         os.makedirs(dirname(output_location), exist_ok=True)
@@ -267,8 +261,10 @@ def my_app(cfg: DictConfig) -> None:
         with torch.no_grad():
             transform_params = defaultdict(list)
             lr_feats = project(original_image)
-            [red_lr_feats], fit_pca = pca([lr_feats], dim=9, use_torch_pca=True)
-
+            # print(lr_feats[0])
+            # print(f"{lr_feats[1].device}, ")
+            red_lr_feats, fit_pca = pca(lr_feats, dim=9, use_torch_pca=True)
+            # print(f"{red_lr_feats[0]}, {fit_pca}")
             jit_features = []
             for transformed_image, tp in tqdm(loader):
                 for k, v in tp.items():

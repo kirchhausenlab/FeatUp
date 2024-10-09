@@ -217,6 +217,7 @@ def pca(image_feats_list, dim=3, fit_pca=None, use_torch_pca=True, max_samples=N
         else:
             fit_pca = PCA(n_components=dim).fit(x)
 
+    # verify the values to prevent errors
     reduced_feats = []
     for feats in image_feats_list:
         x_red = fit_pca.transform(flatten(feats))
@@ -227,6 +228,7 @@ def pca(image_feats_list, dim=3, fit_pca=None, use_torch_pca=True, max_samples=N
         B, C, H, W = feats.shape
         reduced_feats.append(x_red.reshape(B, H, W, dim).permute(0, 3, 1, 2).to(device))
 
+    print(f"************** {reduced_feats} **************")
     return reduced_feats, fit_pca
 
 
