@@ -12,7 +12,8 @@ partition: 0
 total_partitions: 1
 
 # Model Args
-model_type: "maskclip"
+# changing model_type to cell_interactome_dinvo2
+model_type: "cell_interactome_dinvo2"
 activation_type: "token"
 
 # Upsampler args

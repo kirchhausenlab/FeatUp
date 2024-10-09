@@ -14,7 +14,7 @@ from kornia.filters import gaussian_blur2d
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import seed_everything
 from torch.utils.data import DataLoader, Subset
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter  # type: ignore
 from torchmetrics.functional.regression import explained_variance
 from tqdm import tqdm
 
