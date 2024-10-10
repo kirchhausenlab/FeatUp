@@ -83,8 +83,8 @@ def my_app(cfg: DictConfig) -> None:
     print(cfg.output_root)
     seed_everything(0)
 
-    input_size_h = 518
-    input_size_w = 518
+    input_size_h = 224
+    input_size_w = 224
     final_size = 8
     redo = False
 
@@ -116,7 +116,7 @@ def my_app(cfg: DictConfig) -> None:
         steps = 500
     elif cfg.model_type == "ci_dinov2":
         multiplier = 1
-        featurize_batch_size = 8  # for smaller crops, sticking to batch of 8
+        featurize_batch_size = 64  # for smaller crops, sticking to batch of 8
         kernel_size = 29
         final_size = 16
     else:
@@ -158,7 +158,7 @@ def my_app(cfg: DictConfig) -> None:
     if cfg.use_norm:  # not needed for cell interactome
         model = torch.nn.Sequential(model, ChannelNorm(dim))
 
-    model = model.cuda()
+    model = model.to(device=cfg.device)
 
     if cfg.model_type == "midas":
         norm = midas_norm
@@ -237,7 +237,7 @@ def my_app(cfg: DictConfig) -> None:
     loader = DataLoader(dataset, shuffle=False)
 
     for img_num, batch in enumerate(loader):
-        original_image = batch["image"].cuda()
+        original_image = batch["image"].to(device=cfg.device)
         output_location = join(
             feat_dir,
             Path(batch["metadata"]["pth_path"][0]).name,
@@ -260,16 +260,18 @@ def my_app(cfg: DictConfig) -> None:
         loader = DataLoader(dataset, featurize_batch_size)
         with torch.no_grad():
             transform_params = defaultdict(list)
-            lr_feats = project(original_image)
+            lr_feats, _ = project(original_image)
             # print(lr_feats[0])
             # print(f"{lr_feats[1].device}, ")
-            red_lr_feats, fit_pca = pca(lr_feats, dim=9, use_torch_pca=True)
+            [red_lr_feats], fit_pca = pca([lr_feats], dim=9, use_torch_pca=True)
             # print(f"{red_lr_feats[0]}, {fit_pca}")
             jit_features = []
+            # print("*************TQDM********* \n\n\n")
+            i = 0
             for transformed_image, tp in tqdm(loader):
                 for k, v in tp.items():
                     transform_params[k].append(v)
-                jit_features.append(project(transformed_image).cpu())
+                jit_features.append(project(transformed_image)[1].cpu())
             jit_features = torch.cat(jit_features, dim=0)
             transform_params = {
                 k: torch.cat(v, dim=0) for k, v in transform_params.items()
@@ -351,6 +353,7 @@ def my_app(cfg: DictConfig) -> None:
                         apply_jitter(hr_both, cfg.max_pad, selected_tp)
                     )
 
+                # target size is [10, 128, 448, 448]
                 target = torch.cat(target, dim=0).cuda(non_blocking=True)
                 hr_feats_transformed = torch.cat(hr_feats_transformed, dim=0)
 
@@ -360,6 +363,7 @@ def my_app(cfg: DictConfig) -> None:
 
                 scales = get_scale(target)
 
+                # scales is torch.Size([10, 1, 448, 448])
                 rec_loss = (
                     (1 / (2 * scales**2)) * (output - target).square() + scales.log()
                 ).mean()

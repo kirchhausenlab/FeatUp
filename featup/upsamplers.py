@@ -8,7 +8,6 @@ from featup.adaptive_conv_cuda.adaptive_conv import AdaptiveConv
 
 
 class SimpleImplicitFeaturizer(torch.nn.Module):
-
     def __init__(self, n_freqs=20):
         super().__init__()
         self.n_freqs = n_freqs
@@ -18,14 +17,17 @@ class SimpleImplicitFeaturizer(torch.nn.Module):
         b, c, h, w = original_image.shape
         grid_h = torch.linspace(-1, 1, h, device=original_image.device)
         grid_w = torch.linspace(-1, 1, w, device=original_image.device)
-        feats = torch.cat([t.unsqueeze(0) for t in torch.meshgrid([grid_h, grid_w])]).unsqueeze(0)
+        feats = torch.cat(
+            [t.unsqueeze(0) for t in torch.meshgrid([grid_h, grid_w])]
+        ).unsqueeze(0)
         feats = torch.broadcast_to(feats, (b, feats.shape[1], h, w))
 
         feat_list = [feats]
         feats = torch.cat(feat_list, dim=1).unsqueeze(1)
-        freqs = torch.exp(torch.linspace(-2, 10, self.n_freqs, device=original_image.device)) \
-            .reshape(1, self.n_freqs, 1, 1, 1)
-        feats = (feats * freqs)
+        freqs = torch.exp(
+            torch.linspace(-2, 10, self.n_freqs, device=original_image.device)
+        ).reshape(1, self.n_freqs, 1, 1, 1)
+        feats = feats * freqs
 
         feats = feats.reshape(b, self.n_freqs * self.dim_multiplier, h, w)
 
@@ -35,7 +37,6 @@ class SimpleImplicitFeaturizer(torch.nn.Module):
 
 
 class IFA(torch.nn.Module):
-
     def __init__(self, feat_dim, num_scales=20):
         super().__init__()
         self.scales = 2 * torch.exp(torch.tensor(torch.arange(1, num_scales + 1)))
@@ -54,8 +55,12 @@ class IFA(torch.nn.Module):
         assert h == w
         lr_cord = torch.linspace(0, h, steps=h, device=source.device)
         hr_cord = torch.linspace(0, h, steps=2 * h, device=source.device)
-        lr_coords = torch.cat([x.unsqueeze(0) for x in torch.meshgrid(lr_cord, lr_cord)], dim=0).unsqueeze(0)
-        hr_coords = torch.cat([x.unsqueeze(0) for x in torch.meshgrid(hr_cord, hr_cord)], dim=0).unsqueeze(0)
+        lr_coords = torch.cat(
+            [x.unsqueeze(0) for x in torch.meshgrid(lr_cord, lr_cord)], dim=0
+        ).unsqueeze(0)
+        hr_coords = torch.cat(
+            [x.unsqueeze(0) for x in torch.meshgrid(hr_cord, hr_cord)], dim=0
+        ).unsqueeze(0)
         up_lr_coords = F.interpolate(lr_coords, (h * 2, w * 2), mode="nearest")
         coord_diff = up_lr_coords - hr_coords
         coord_diff_feats = self.sin_feats(coord_diff)
@@ -65,9 +70,16 @@ class IFA(torch.nn.Module):
 
 
 class SAPAModule(nn.Module):
-    def __init__(self, dim_y, dim_x=None,
-                 up_factor=2, up_kernel_size=5, embedding_dim=64,
-                 qkv_bias=True, norm=nn.LayerNorm):
+    def __init__(
+        self,
+        dim_y,
+        dim_x=None,
+        up_factor=2,
+        up_kernel_size=5,
+        embedding_dim=64,
+        qkv_bias=True,
+        norm=nn.LayerNorm,
+    ):
         super().__init__()
         dim_x = dim_x if dim_x is not None else dim_y
 
@@ -104,7 +116,7 @@ class SAPAModule(nn.Module):
         from timm.models.layers import trunc_normal_
 
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -140,10 +152,10 @@ class SAPAUpsampler(torch.nn.Module):
 
 
 class CarafeUpsampler(torch.nn.Module):
-
     def __init__(self, dim, kernel_size, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from mmcv.ops import CARAFEPack
+
         self.up1 = CARAFEPack(dim, up_kernel=3, up_group=1, scale_factor=2)
         self.up2 = CARAFEPack(dim, up_kernel=3, up_group=1, scale_factor=2)
         self.up3 = CARAFEPack(dim, up_kernel=3, up_group=1, scale_factor=2)
@@ -158,7 +170,6 @@ class CarafeUpsampler(torch.nn.Module):
 
 
 class LayeredResizeConv(torch.nn.Module):
-
     def __init__(self, dim, kernel_size, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conv1 = torch.nn.Conv2d(dim + 3, dim, kernel_size, padding="same")
@@ -182,7 +193,6 @@ class LayeredResizeConv(torch.nn.Module):
 
 
 class JBULearnedRange(torch.nn.Module):
-
     def __init__(self, guidance_dim, feat_dim, key_dim, scale=2, radius=3):
         super().__init__()
         self.scale = scale
@@ -197,15 +207,15 @@ class JBULearnedRange(torch.nn.Module):
         self.range_proj = torch.nn.Sequential(
             torch.nn.Conv2d(guidance_dim, key_dim, 1, 1),
             torch.nn.GELU(),
-            torch.nn.Dropout2d(.1),
+            torch.nn.Dropout2d(0.1),
             torch.nn.Conv2d(key_dim, key_dim, 1, 1),
         )
 
         self.fixup_proj = torch.nn.Sequential(
-            torch.nn.Conv2d(guidance_dim + self.diameter ** 2, self.diameter ** 2, 1, 1),
+            torch.nn.Conv2d(guidance_dim + self.diameter**2, self.diameter**2, 1, 1),
             torch.nn.GELU(),
-            torch.nn.Dropout2d(.1),
-            torch.nn.Conv2d(self.diameter ** 2, self.diameter ** 2, 1, 1),
+            torch.nn.Dropout2d(0.1),
+            torch.nn.Conv2d(self.diameter**2, self.diameter**2, 1, 1),
         )
 
         self.sigma_spatial = nn.Parameter(torch.tensor(1.0))
@@ -213,24 +223,29 @@ class JBULearnedRange(torch.nn.Module):
     def get_range_kernel(self, x):
         GB, GC, GH, GW = x.shape
         proj_x = self.range_proj(x)
-        proj_x_padded = F.pad(proj_x, pad=[self.radius] * 4, mode='reflect')
-        queries = torch.nn.Unfold(self.diameter)(proj_x_padded) \
-            .reshape((GB, self.key_dim, self.diameter * self.diameter, GH, GW)) \
+        proj_x_padded = F.pad(proj_x, pad=[self.radius] * 4, mode="reflect")
+        queries = (
+            torch.nn.Unfold(self.diameter)(proj_x_padded)
+            .reshape((GB, self.key_dim, self.diameter * self.diameter, GH, GW))
             .permute(0, 1, 3, 4, 2)
+        )
         pos_temp = self.range_temp.exp().clamp_min(1e-4).clamp_max(1e4)
-        return F.softmax(pos_temp * torch.einsum("bchwp,bchw->bphw", queries, proj_x), dim=1)
+        return F.softmax(
+            pos_temp * torch.einsum("bchwp,bchw->bphw", queries, proj_x), dim=1
+        )
 
     def get_spatial_kernel(self, device):
         dist_range = torch.linspace(-1, 1, self.diameter, device=device)
         x, y = torch.meshgrid(dist_range, dist_range)
         patch = torch.cat([x.unsqueeze(0), y.unsqueeze(0)], dim=0)
-        return torch.exp(- patch.square().sum(0) / (2 * self.sigma_spatial ** 2)) \
-            .reshape(1, self.diameter * self.diameter, 1, 1)
+        return torch.exp(-patch.square().sum(0) / (2 * self.sigma_spatial**2)).reshape(
+            1, self.diameter * self.diameter, 1, 1
+        )
 
     def forward(self, source, guidance):
         GB, GC, GH, GW = guidance.shape
         SB, SC, SH, SQ = source.shape
-        assert (SB == GB)
+        assert SB == GB
 
         spatial_kernel = self.get_spatial_kernel(source.device)
         range_kernel = self.get_range_kernel(guidance)
@@ -238,20 +253,24 @@ class JBULearnedRange(torch.nn.Module):
         combined_kernel = range_kernel * spatial_kernel
         combined_kernel /= combined_kernel.sum(1, keepdim=True).clamp(1e-7)
 
-        combined_kernel += .1 * self.fixup_proj(torch.cat([combined_kernel, guidance], dim=1))
-        combined_kernel = combined_kernel.permute(0, 2, 3, 1) \
-            .reshape(GB, GH, GW, self.diameter, self.diameter)
+        combined_kernel += 0.1 * self.fixup_proj(
+            torch.cat([combined_kernel, guidance], dim=1)
+        )
+        combined_kernel = combined_kernel.permute(0, 2, 3, 1).reshape(
+            GB, GH, GW, self.diameter, self.diameter
+        )
 
-        hr_source = torch.nn.Upsample((GH, GW), mode='bicubic', align_corners=False)(source)
-        hr_source_padded = F.pad(hr_source, pad=[self.radius] * 4, mode='reflect')
+        hr_source = torch.nn.Upsample((GH, GW), mode="bicubic", align_corners=False)(
+            source
+        )
+        hr_source_padded = F.pad(hr_source, pad=[self.radius] * 4, mode="reflect")
 
         # (B C, H+Pad, W+Pad) x (B, H, W, KH, KW) -> BCHW
-        result =  AdaptiveConv.apply(hr_source_padded, combined_kernel)
+        result = AdaptiveConv.apply(hr_source_padded, combined_kernel)
         return result
 
 
 class JBUStack(torch.nn.Module):
-
     def __init__(self, feat_dim, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.up1 = JBULearnedRange(3, feat_dim, 32, radius=3)
@@ -259,8 +278,8 @@ class JBUStack(torch.nn.Module):
         self.up3 = JBULearnedRange(3, feat_dim, 32, radius=3)
         self.up4 = JBULearnedRange(3, feat_dim, 32, radius=3)
         self.fixup_proj = torch.nn.Sequential(
-            torch.nn.Dropout2d(0.2),
-            torch.nn.Conv2d(feat_dim, feat_dim, kernel_size=1))
+            torch.nn.Dropout2d(0.2), torch.nn.Conv2d(feat_dim, feat_dim, kernel_size=1)
+        )
 
     def upsample(self, source, guidance, up):
         _, _, h, w = source.shape
@@ -277,7 +296,6 @@ class JBUStack(torch.nn.Module):
 
 
 class Bilinear(torch.nn.Module):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -287,17 +305,17 @@ class Bilinear(torch.nn.Module):
 
 
 def get_upsampler(upsampler, dim):
-    if upsampler == 'bilinear':
+    if upsampler == "bilinear":
         return Bilinear()
-    elif upsampler == 'jbu_stack':
+    elif upsampler == "jbu_stack":
         return JBUStack(dim)
-    elif upsampler == 'resize_conv':
+    elif upsampler == "resize_conv":
         return LayeredResizeConv(dim, 1)
-    elif upsampler == 'carafe':
+    elif upsampler == "carafe":
         return CarafeUpsampler(dim, 1)
-    elif upsampler == 'sapa':
+    elif upsampler == "sapa":
         return SAPAUpsampler(dim_x=dim)
-    elif upsampler == 'ifa':
+    elif upsampler == "ifa":
         return IFA(dim)
     else:
         raise ValueError(f"Unknown upsampler {upsampler}")

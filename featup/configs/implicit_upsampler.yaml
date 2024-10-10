@@ -26,7 +26,7 @@ blur_attn: True
 mag_tv_weight: 0.05
 mag_weight: 0.001
 color_feats: true
-pca_batch: 25 # reduced from 50
+pca_batch: 50 # reduced from 50
 proj_dim: 128
 max_pad: 30
 use_flips: true
@@ -38,7 +38,7 @@ use_norm: false
 
 # Training args
 steps: 1200
-n_images: 3000
+n_images: 200 # 3000
 
 # No need to change
 hydra:
@@ -57,8 +57,8 @@ model:
     separate_head: false
   student:
     freeze_backbone: true
-    arch: vit_giant2
-    patch_size: 14
+    arch: vit_base
+    patch_size: 8
     drop_path_rate: 0.4
     layerscale: 1.0e-05
     drop_path_uniform: true
@@ -78,7 +78,7 @@ model:
     local_crops_scale:
       - 0.05
       - 0.32
-    global_crops_size: 518
+    global_crops_size: 448 # 518
     local_crops_size: 98
 
 featup:
@@ -98,12 +98,8 @@ train:
   log_interval: 10
   load_optim: true
 
-student:
-  arch: vit_large
-  patch_size: 8
-
 
 seed: 0
-device: cuda
+device: "cuda:1"
 TARGET_FILE_EXTENSION: ".pth"
 search_suffix: "2D/**/*${TARGET_FILE_EXTENSION}"

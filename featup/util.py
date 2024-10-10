@@ -228,7 +228,6 @@ def pca(image_feats_list, dim=3, fit_pca=None, use_torch_pca=True, max_samples=N
         B, C, H, W = feats.shape
         reduced_feats.append(x_red.reshape(B, H, W, dim).permute(0, 3, 1, 2).to(device))
 
-    print(f"************** {reduced_feats} **************")
     return reduced_feats, fit_pca
 
 

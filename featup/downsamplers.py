@@ -4,7 +4,6 @@ from kornia.filters import gaussian_blur2d
 
 
 class SimpleDownsampler(torch.nn.Module):
-
     def get_kernel(self):
         k = self.kernel_params.unsqueeze(0).unsqueeze(0).abs()
         k /= k.sum()
@@ -21,28 +20,28 @@ class SimpleDownsampler(torch.nn.Module):
         input_imgs = imgs.reshape(b * c, 1, h, w)
         stride = (h - self.kernel_size) // (self.final_size - 1)
 
-        return F.conv2d(
-            input_imgs,
-            self.get_kernel(),
-            stride=stride
-        ).reshape(b, c, self.final_size, self.final_size)
+        return F.conv2d(input_imgs, self.get_kernel(), stride=stride).reshape(
+            b, c, self.final_size, self.final_size
+        )
 
 
 class AttentionDownsampler(torch.nn.Module):
-
     def __init__(self, dim, kernel_size, final_size, blur_attn, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.kernel_size = kernel_size
         self.final_size = final_size
         self.in_dim = dim
         self.attention_net = torch.nn.Sequential(
-            torch.nn.Dropout(p=.2),
-            torch.nn.Linear(self.in_dim, 1)
+            torch.nn.Dropout(p=0.2), torch.nn.Linear(self.in_dim, 1)
         )
-        self.w = torch.nn.Parameter(torch.ones(kernel_size, kernel_size).cuda()
-                                    + .01 * torch.randn(kernel_size, kernel_size).cuda())
-        self.b = torch.nn.Parameter(torch.zeros(kernel_size, kernel_size).cuda()
-                                    + .01 * torch.randn(kernel_size, kernel_size).cuda())
+        self.w = torch.nn.Parameter(
+            torch.ones(kernel_size, kernel_size).cuda()
+            + 0.01 * torch.randn(kernel_size, kernel_size).cuda()
+        )
+        self.b = torch.nn.Parameter(
+            torch.zeros(kernel_size, kernel_size).cuda()
+            + 0.01 * torch.randn(kernel_size, kernel_size).cuda()
+        )
         self.blur_attn = blur_attn
 
     def forward_attention(self, feats, guidance):
@@ -58,10 +57,19 @@ class AttentionDownsampler(torch.nn.Module):
 
         stride = (h - self.kernel_size) // (self.final_size - 1)
 
-        patches = torch.nn.Unfold(self.kernel_size, stride=stride)(inputs) \
+        patches = (
+            torch.nn.Unfold(self.kernel_size, stride=stride)(inputs)
             .reshape(
-            (b, self.in_dim, self.kernel_size * self.kernel_size, self.final_size, self.final_size * int(w / h))) \
+                (
+                    b,
+                    self.in_dim,
+                    self.kernel_size * self.kernel_size,
+                    self.final_size,
+                    self.final_size * int(w / h),
+                )
+            )
             .permute(0, 3, 4, 2, 1)
+        )
 
         patch_logits = self.attention_net(patches).squeeze(-1)
 
