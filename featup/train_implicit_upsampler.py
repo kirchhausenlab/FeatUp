@@ -116,9 +116,9 @@ def my_app(cfg: DictConfig) -> None:
         steps = 500
     elif cfg.model_type == "ci_dinov2":
         multiplier = 1
-        featurize_batch_size = 64  # for smaller crops, sticking to batch of 8
+        featurize_batch_size = 8  # for smaller crops, sticking to batch of 8
         kernel_size = 29
-        final_size = 16
+        final_size = 28
     else:
         raise ValueError(f"Unknown model type {cfg.model_type}")
 
@@ -271,7 +271,7 @@ def my_app(cfg: DictConfig) -> None:
             for transformed_image, tp in tqdm(loader):
                 for k, v in tp.items():
                     transform_params[k].append(v)
-                jit_features.append(project(transformed_image)[1].cpu())
+                jit_features.append(project(transformed_image)[0].cpu())
             jit_features = torch.cat(jit_features, dim=0)
             transform_params = {
                 k: torch.cat(v, dim=0) for k, v in transform_params.items()
