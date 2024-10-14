@@ -49,14 +49,15 @@ class AttentionDownsampler(torch.nn.Module):
 
     def forward(self, hr_feats, guidance):
         b, c, h, w = hr_feats.shape
-
+        print(f"\n \n********* b is {b}, c is {c}, h is {h}, w is{w}***********")
         if self.blur_attn:
             inputs = gaussian_blur2d(hr_feats, 5, (1.0, 1.0))
         else:
             inputs = hr_feats
 
         stride = (h - self.kernel_size) // (self.final_size - 1)
-
+        print(f"{self.final_size}-1")
+        print(f"stride is {stride}, {h-self.kernel_size}")
         patches = (
             torch.nn.Unfold(self.kernel_size, stride=stride)(inputs)
             .reshape(
