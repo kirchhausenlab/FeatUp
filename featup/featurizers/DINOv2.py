@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 import warnings
 from functools import partial
 from omegaconf import DictConfig
@@ -496,15 +497,20 @@ class DINOv2Featurizer(nn.Module):
 class CellInteractomeDinoV2Featurizer(nn.Module):
     def __init__(
         self,
-        cfg: DictConfig,
+        student_cfg: DictConfig,
+        global_crops_size: int,
+        upsampler_cfg: DictConfig,
+        teacher_weights_path: Optional[Path] = None,
         backbone: Optional[nn.Module] = None,
     ):
         super().__init__()
-        self.use_norm = cfg.featup.upsampler.use_norm
-        self.patch_size = cfg.model.student.patch_size
+        self.use_norm = upsampler_cfg.use_norm
+        self.patch_size = student_cfg.patch_size
 
         if backbone is None:
-            self.backbone, self.dim = self._init_backbone(cfg)
+            self.backbone, self.dim = self._init_backbone(
+                student_cfg, global_crops_size, teacher_weights_path
+            )
         else:
             self.backbone = backbone
             self.dim = self.backbone.embed_dim
@@ -513,7 +519,7 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
         if self.use_norm:
             self.channel_norm = ChannelNorm(self.dim)
 
-        self.upsampler = self._init_upsampler(cfg, self.dim)
+        self.upsampler = self._init_upsampler(upsampler_cfg, self.dim)
 
     def forward(
         self,
@@ -534,12 +540,12 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
     @staticmethod
     def _init_upsampler(cfg: DictConfig, dim: int) -> nn.Module:
         upsampler = get_upsampler(
-            upsampler=cfg.featup.upsampler.type,
+            upsampler=cfg.upsampler.type,
             dim=dim,
         )
-        if cfg.featup.upsampler.weights:
+        if cfg.upsampler.weights:
             state_dict = torch.load(
-                cfg.featup.upsampler.weights,
+                cfg.upsampler.weights,
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )["state_dict"]
@@ -553,12 +559,18 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
 
     @staticmethod
     def _init_backbone(
-        cfg: DictConfig,
+        student_cfg: DictConfig,
+        global_crops_size: int,
+        teacher_weights_path: Optional[Path] = None,
     ) -> Tuple[nn.Module, int]:
-        _, teacher, dimension = build_model_from_cfg(cfg, only_teacher=True)
-        if cfg.model.weights:
+        _, teacher, dimension = build_model_from_cfg(
+            student_cfg=student_cfg,
+            global_crops_size=global_crops_size,
+            only_teacher=True,
+        )
+        if teacher_weights_path:
             state_dict = torch.load(
-                cfg.model.weights,
+                teacher_weights_path,
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )
