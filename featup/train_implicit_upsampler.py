@@ -83,9 +83,9 @@ def my_app(cfg: DictConfig) -> None:
     print(cfg.output_root)
     seed_everything(0)
 
-    input_size_h = 224
-    input_size_w = 224
-    final_size = 8
+    input_size_h = cfg.image.input_h
+    input_size_w = cfg.image.input_w
+    final_size = cfg.image.final_patch_size
     redo = False
 
     steps = cfg.steps
@@ -116,9 +116,9 @@ def my_app(cfg: DictConfig) -> None:
         steps = 500
     elif cfg.model_type == "ci_dinov2":
         multiplier = 1
-        featurize_batch_size = 8  # for smaller crops, sticking to batch of 8
+        featurize_batch_size = 4  # for smaller crops, sticking to batch of 8
         kernel_size = 29
-        final_size = 28
+        final_size = 16
     else:
         raise ValueError(f"Unknown model type {cfg.model_type}")
 
@@ -241,6 +241,7 @@ def my_app(cfg: DictConfig) -> None:
         output_location = join(
             feat_dir,
             Path(batch["metadata"]["pth_path"][0]).name,
+            str(img_num),
         )
 
         os.makedirs(dirname(output_location), exist_ok=True)
@@ -266,7 +267,6 @@ def my_app(cfg: DictConfig) -> None:
             [red_lr_feats], fit_pca = pca([lr_feats], dim=9, use_torch_pca=True)
             # print(f"{red_lr_feats[0]}, {fit_pca}")
             jit_features = []
-            # print("*************TQDM********* \n\n\n")
             i = 0
             for transformed_image, tp in tqdm(loader):
                 for k, v in tp.items():
@@ -332,7 +332,6 @@ def my_app(cfg: DictConfig) -> None:
             )
 
         optim = torch.optim.NAdam(params)
-
         for step in tqdm(range(steps), f"Image {img_num} of {partition_size}"):
             for i in range(batch_size // inner_batch):
                 upsampler.train()
@@ -356,7 +355,7 @@ def my_app(cfg: DictConfig) -> None:
                 # target size is [10, 128, 448, 448]
                 target = torch.cat(target, dim=0).cuda(non_blocking=True)
                 hr_feats_transformed = torch.cat(hr_feats_transformed, dim=0)
-
+                print("Shape of hr_feats_transformed:", hr_feats_transformed.shape)
                 output_both = downsampler(hr_feats_transformed, None)
                 magnitude = output_both[:, 0:1, :, :]
                 output = output_both[:, 1:, :, :]
