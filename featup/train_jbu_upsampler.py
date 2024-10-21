@@ -76,6 +76,7 @@ class JBUFeatUp(pl.LightningModule):
         self.tv_weight = tv_weight
         self.chkpt_dir = chkpt_dir
 
+        # defaults set to dim = 384, patch_size = 14
         self.model, self.patch_size, self.dim = get_featurizer(
             model_type, activation_type, num_classes=1000
         )

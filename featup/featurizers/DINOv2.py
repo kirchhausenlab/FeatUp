@@ -511,6 +511,9 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
             self.backbone, self.dim = self._init_backbone(
                 student_cfg, global_crops_size, teacher_weights_path
             )
+            logger.info(
+                f"Backbone initialized, was none intially, using DINOv2. Dim: {self.dim}********** L:515 in featurizers.py",
+            )
         else:
             self.backbone = backbone
             self.dim = self.backbone.embed_dim
@@ -539,6 +542,9 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
 
     @staticmethod
     def _init_upsampler(cfg: DictConfig, dim: int) -> nn.Module:
+        logger.info(
+            "Initializing upsampler for DINOV2******************, L: 545 in featurizers.py"
+        )
         upsampler = get_upsampler(
             upsampler=cfg.upsampler.type,
             dim=dim,

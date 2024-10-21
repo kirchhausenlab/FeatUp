@@ -1,4 +1,5 @@
 import torch
+from loguru import logger
 
 
 def get_featurizer(name, activation_type="key", **kwargs):
@@ -52,13 +53,13 @@ def get_featurizer(name, activation_type="key", **kwargs):
         model = MAEFeaturizer(**kwargs)
         dim = 1024
     elif name == "mocov3":
-        from .MOCOv3 import MOCOv3Featurizer
+        from .MOCOv3 import MOCOv3Featurizer  # type: ignore (no attribute, ignore)
 
         patch_size = 16
         model = MOCOv3Featurizer()
         dim = 384
     elif name == "msn":
-        from .MSN import MSNFeaturizer
+        from .MSN import MSNFeaturizer  # type: ignore (no attribute, ignore)
 
         patch_size = 16
         model = MSNFeaturizer()
@@ -88,12 +89,18 @@ def get_featurizer(name, activation_type="key", **kwargs):
             CellInteractomeDinoV2Featurizer,
         )
 
+        logger.info("Using CellInteractomeDinoV2Featurizer")
         cfg = kwargs["cfg"]
         if cfg is None:
             raise ValueError("cfg is required for cell_interactome_dinov2")
-        # look at checkpoint for patch size. patch size can be 8, 14, 16
-        patch_size = 8
-        model = CellInteractomeDinoV2Featurizer(cfg)
+        patch_size = 14
+        model = CellInteractomeDinoV2Featurizer(
+            student_cfg=cfg.model.train.student,
+            global_crops_size=cfg.model.train.crops.global_crops_size,
+            upsampler_cfg=cfg.model.featup,
+            teacher_weights_path=cfg.model.train.weights,
+            backbone=None,
+        )
         dim = 384
     else:
         raise ValueError("unknown model: {}".format(name))

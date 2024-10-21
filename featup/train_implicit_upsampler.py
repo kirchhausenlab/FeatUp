@@ -118,7 +118,7 @@ def my_app(cfg: DictConfig) -> None:
         multiplier = 1
         featurize_batch_size = 4  # for smaller crops, sticking to batch of 8
         kernel_size = 29
-        final_size = 16
+        # final_size = 8
     else:
         raise ValueError(f"Unknown model type {cfg.model_type}")
 
@@ -148,17 +148,18 @@ def my_app(cfg: DictConfig) -> None:
 
     print(str(cfg.model_type))
 
+    print("Entering get_featurizer")
     model, _, dim = get_featurizer(
-        cfg.model_type,
+        name=str(cfg.model_type),
         activation_type=cfg.activation_type,
         output_root=cfg.output_root,
         cfg=cfg,  # additional parameter for cell interactome
     )
-
+    raise ValueError("stop here")
     if cfg.use_norm:  # not needed for cell interactome
-        model = torch.nn.Sequential(model, ChannelNorm(dim))
+        model = torch.nn.Sequential(model, ChannelNorm(dim))  # type: ignore
 
-    model = model.to(device=cfg.device)
+    model = model.to(device=cfg.device)  # type: ignore
 
     if cfg.model_type == "midas":
         norm = midas_norm
@@ -181,24 +182,13 @@ def my_app(cfg: DictConfig) -> None:
         ]
     )
 
-    # full_dataset = get_dataset(
-    #     dataroot=cfg.pytorch_data_dir,
-    #     name=cfg.dataset,
-    #     split=cfg.split,
-    #     transform=transform,
-    #     target_transform=None,
-    #     include_labels=False,
-    # )
-
     ###  IMAGERECOG setup data preprocessing
     model.train()
-    # inputs_dtype = torch.half
-    # fp16_scaler = model.fp16_scaler  # for mixed precision training
 
     # setup data preprocessing
 
-    img_size = cfg.model.crops.global_crops_size
-    patch_size = cfg.model.student.patch_size
+    img_size = cfg.model.train.crops.global_crops_size
+    patch_size = cfg.model.train.student.patch_size
     n_tokens = (img_size // patch_size) ** 2
     mask_generator = MaskingGenerator(
         input_size=(img_size // patch_size, img_size // patch_size),
@@ -206,8 +196,8 @@ def my_app(cfg: DictConfig) -> None:
     )
 
     full_dataset = CellDataset2D(
-        base_data_dir=Path(cfg.train.dataset_path),
-        path_to_txt=Path(cfg.train.path_to_txt),
+        base_data_dir=cfg.train.dataset_path,
+        path_to_txt=cfg.train.path_to_txt,
         search_suffix=cfg.train.search_suffix,
         max_files=cfg.train.max_files,
         transform=transform,
@@ -262,10 +252,7 @@ def my_app(cfg: DictConfig) -> None:
         with torch.no_grad():
             transform_params = defaultdict(list)
             lr_feats, _ = project(original_image)
-            # print(lr_feats[0])
-            # print(f"{lr_feats[1].device}, ")
             [red_lr_feats], fit_pca = pca([lr_feats], dim=9, use_torch_pca=True)
-            # print(f"{red_lr_feats[0]}, {fit_pca}")
             jit_features = []
             i = 0
             for transformed_image, tp in tqdm(loader):
@@ -311,6 +298,7 @@ def my_app(cfg: DictConfig) -> None:
 
         params.append({"params": downsampler.parameters()})
 
+        print(f"******HERE")
         if cfg.outlier_detection:
             with torch.no_grad():
                 outlier_detector = torch.nn.Conv2d(cfg.proj_dim, 1, 1).cuda()
@@ -355,13 +343,15 @@ def my_app(cfg: DictConfig) -> None:
                 # target size is [10, 128, 448, 448]
                 target = torch.cat(target, dim=0).cuda(non_blocking=True)
                 hr_feats_transformed = torch.cat(hr_feats_transformed, dim=0)
-                print("Shape of hr_feats_transformed:", hr_feats_transformed.shape)
+                # (10, proj_dim, input_h, input_w)
+                # print(f"hr_feats shape is {hr_feats_transformed.shape}********")
                 output_both = downsampler(hr_feats_transformed, None)
+
+                print(f"output_both shape is {output_both.shape}")
                 magnitude = output_both[:, 0:1, :, :]
                 output = output_both[:, 1:, :, :]
 
                 scales = get_scale(target)
-
                 # scales is torch.Size([10, 1, 448, 448])
                 rec_loss = (
                     (1 / (2 * scales**2)) * (output - target).square() + scales.log()
@@ -469,7 +459,7 @@ def my_app(cfg: DictConfig) -> None:
                             .to(torch.uint8)
                         )
                         Image.fromarray(np_arr.detach().cpu().numpy()).save(
-                            "../sample-images/low_res_feats.png"
+                            f"../sample-images/low_res_feats_{step}.png"
                         )
 
                         writer.add_image("feats/1/lr", up(red_lr_feats[0, :3]), step)

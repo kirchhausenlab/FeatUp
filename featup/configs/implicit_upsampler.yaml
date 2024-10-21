@@ -37,7 +37,7 @@ param_type: "implicit"
 use_norm: false
 
 # Training args
-steps: 1200
+steps: 2000
 n_images: 100 # 3000
 
 # No need to change
@@ -48,63 +48,67 @@ hydra:
 
 
 model:
-  # weights: ${weights_path}/pretrained/dinov2_vitg14_reg4_pretrain_ckpt.pth
-  weights: ${weights_path}/pretrain_care_vits/ckpt_step_21999.pth
-  dino:
-    freeze_head: false
-  ibot:
-    freeze_head: false
-    separate_head: false
-  student:
-    freeze_backbone: true
-    arch: vit_small
-    patch_size: 14
-    drop_path_rate: 0.4
-    layerscale: 1.0e-05
-    drop_path_uniform: true
-    qkv_bias: true
-    proj_bias: true
-    ffn_bias: true
-    ffn_layer: swiglufused
-    num_register_tokens: 4
-    block_chunks: 0
-    interpolate_antialias: false
-    interpolate_offset: 0.1
-  crops:
-    global_crops_scale:
-      - 0.32
-      - 1.0
-    local_crops_number: 8
-    local_crops_scale:
-      - 0.05
-      - 0.32
-    global_crops_size: 224 # 518
-    local_crops_size: 98
+  train: 
+    weights: ${weights_path}/pretrain_care_vits/ckpt_step_59999.pth # weights: ${weights_path}/pretrained/dinov2_vitg14_reg4_pretrain_ckpt.pth
+    dino:
+      freeze_head: false
+    ibot:
+      freeze_head: false
+      separate_head: false
+    student:
+      freeze_backbone: true
+      arch: vit_small
+      patch_size: 14
+      drop_path_rate: 0.4
+      layerscale: 1.0e-05
+      drop_path_uniform: true
+      qkv_bias: true
+      proj_bias: true
+      ffn_bias: true
+      ffn_layer: swiglufused
+      num_register_tokens: 4
+      block_chunks: 0
+      interpolate_antialias: false
+      interpolate_offset: 0.1
+    crops:
+      global_crops_scale:
+        - 0.32
+        - 1.0
+      local_crops_number: 8
+      local_crops_scale:
+        - 0.05
+        - 0.32
+      global_crops_size: 224 # 518
+      local_crops_size: 98
+  featup:
+    upsampler:
+      type: jbu_stack
+      use_norm: true
+      weights: ""
 
 image:
   input_h: 224
   input_w: 224
   final_patch_size: 14
 
-featup:
-  upsampler:
-    type: jbu_stack
-    use_norm: true
-    weights: ""
 
 train:
   resume: true
   dataset_path: ${base_path}/care_llsm_518
   path_to_txt: ${train.dataset_path}/train.txt
-  output_dir: ${weights_path}/${logging.wandb_config.name}
+  output_dir: ${weights_path}/${logging.name}
   search_suffix: ${search_suffix}
   max_files: 1000000
   num_workers: 50 # reduced from 175
   log_interval: 10
   load_optim: true
 
+logging:
+  project: cell-interactome
+  entity: artificial-intelligence-research
+  name: ${experiment_name}
 
 seed: 0
-device: "cuda:1"
+device: "cuda:2"
 TARGET_FILE_EXTENSION: ".pth"
 search_suffix: "2D/**/*${TARGET_FILE_EXTENSION}"

@@ -1,13 +1,22 @@
+logging:
+  project: cell-interactome
+  entity: artificial-intelligence-research
+  name: ${experiment_name}
+
+seed: 0
+TARGET_FILE_EXTENSION: ".pth"
+search_suffix: "2D/**/*${TARGET_FILE_EXTENSION}"
+
 # Environment Args
 output_root: '../../'
 pytorch_data_dir: '/pytorch-data'
 submitting_to_aml: false
 
 # Dataset args
-dataset: "cocostuff"
+dataset: "" # use my own dataset
 
 # Model Args
-model_type: "vit"
+model_type: "ci_dinov2" # original: "vit"
 activation_type: "token"
 
 # Upsampling args
@@ -25,9 +34,9 @@ tv_weight: 0.0
 implicit_sup_weight: 1.0
 
 # Training args
-batch_size: 4
+batch_size: 32 # original: 4
 epochs: 1
-num_gpus: 1
+num_gpus: 8 # original: 1
 num_workers: 24
 lr: 1e-3
 
@@ -37,3 +46,42 @@ hydra:
     dir: "."
   output_subdir: ~
 
+
+model:
+  train: 
+    weights: ${weights_path}/pretrain_care_vits/ckpt_step_59999.pth # weights: ${weights_path}/pretrained/dinov2_vitg14_reg4_pretrain_ckpt.pth
+    dino:
+      freeze_head: false
+    ibot:
+      freeze_head: false
+      separate_head: false
+    student:
+      freeze_backbone: true
+      arch: vit_small
+      patch_size: 14
+      drop_path_rate: 0.4
+      layerscale: 1.0e-05
+      drop_path_uniform: true
+      qkv_bias: true
+      proj_bias: true
+      ffn_bias: true
+      ffn_layer: swiglufused
+      num_register_tokens: 4
+      block_chunks: 0
+      interpolate_antialias: false
+      interpolate_offset: 0.1
+    crops:
+      global_crops_scale:
+        - 0.32
+        - 1.0
+      local_crops_number: 8
+      local_crops_scale:
+        - 0.05
+        - 0.32
+      global_crops_size: 224 # 518
+      local_crops_size: 98
+  featup:
+    upsampler:
+      type: jbu_stack
+      use_norm: true
+      weights: ""
