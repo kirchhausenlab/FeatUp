@@ -88,3 +88,15 @@ model:
       type: jbu_stack
       use_norm: true
       weights: ""
+      
+ train:
+  resume: true
+  dataset_path: ${base_path}/care_llsm_518
+  path_to_txt: ${train.dataset_path}/train.txt
+  output_dir: ${weights_path}/${logging.name}
+  search_suffix: ${search_suffix}
+  max_files: 1000000
+  num_workers: 50 # reduced from 175
+  log_interval: 10
+  load_optim: true
+

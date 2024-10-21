@@ -504,7 +504,7 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
         backbone: Optional[nn.Module] = None,
     ):
         super().__init__()
-        self.use_norm = upsampler_cfg.use_norm
+        self.use_norm = upsampler_cfg.upsampler.use_norm
         self.patch_size = student_cfg.patch_size
 
         if backbone is None:
@@ -546,12 +546,13 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
             "Initializing upsampler for DINOV2******************, L: 545 in featurizers.py"
         )
         upsampler = get_upsampler(
-            upsampler=cfg.featup.upsampler.type,
+            upsampler=cfg.upsampler.type,
             dim=dim,
         )
-        if cfg.featup.upsampler.weights:
+        if cfg.upsampler.weights:
             state_dict = torch.load(
                 cfg.featup.upsampler.weights,
+
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )["state_dict"]
