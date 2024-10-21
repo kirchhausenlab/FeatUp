@@ -21,7 +21,6 @@ class SlicedDataset(Dataset):
         return self.end - self.start
 
 
-
 class SingleImageDataset(Dataset):
     def __init__(self, i, ds, l=None):
         self.ds = ds
@@ -36,23 +35,30 @@ class SingleImageDataset(Dataset):
 
 
 def get_dataset(dataroot, name, split, transform, target_transform, include_labels):
-    if name == 'imagenet':
-        if split == 'val':
-            imagenet_subset = f'datalists/val_paths_vit.txt'
+    if name == "imagenet":
+        if split == "val":
+            imagenet_subset = f"datalists/val_paths_vit.txt"
         else:
             imagenet_subset = None
 
-        return ImageNetSubset(dataroot, split, transform, target_transform,
-                              include_labels=include_labels, subset=imagenet_subset)
-    elif name == 'cocostuff':
-        return Coco(dataroot, split, transform, target_transform, include_labels=include_labels)
-    elif name.startswith('davis_'):
+        return ImageNetSubset(
+            dataroot,
+            split,
+            transform,
+            target_transform,
+            include_labels=include_labels,
+            subset=imagenet_subset,
+        )
+    elif name == "cocostuff":
+        return Coco(
+            dataroot, split, transform, target_transform, include_labels=include_labels
+        )
+    elif name.startswith("davis_"):
         return DAVIS(dataroot, name.split("_")[-1], transform)
     elif name == "sample":
         return SampleImage(
-            paths=["../sample-images/bird_left.jpg",
-                   "../sample-images/bird_right.jpg"],
-            transform=transform
+            paths=["../sample-images/bird_left.jpg", "../sample-images/bird_right.jpg"],
+            transform=transform,
         )
     else:
         raise ValueError(f"Unknown dataset {name}")

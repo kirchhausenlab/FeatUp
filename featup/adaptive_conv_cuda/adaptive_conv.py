@@ -8,7 +8,6 @@ torch.manual_seed(42)
 
 
 class AdaptiveConv(Function):
-
     @staticmethod
     def forward(ctx, input, filters):
         ctx.save_for_backward(filters, input)

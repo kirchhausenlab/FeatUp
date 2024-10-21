@@ -24,6 +24,12 @@ from featup.layers import ChannelNorm
 from featup.losses import TVLoss, SampledCRFLoss, entropy
 from featup.upsamplers import get_upsampler
 from featup.util import pca, RollingAvg, unnorm, norm, prep_image
+from cell_interactome.data.dinov2.dataset import CellDataset2D
+from cell_interactome.data.dinov2 import (
+    collate_data_and_cast,
+    DataAugmentationDINO,
+    MaskingGenerator,
+)
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -60,6 +66,7 @@ class JBUFeatUp(pl.LightningModule):
         upsampler,
         downsampler,
         chkpt_dir,
+        cfg,
     ):
         super().__init__()
         self.model_type = model_type
@@ -79,7 +86,7 @@ class JBUFeatUp(pl.LightningModule):
 
         # defaults set to dim = 384, patch_size = 14
         self.model, self.patch_size, self.dim = get_featurizer(
-            model_type, activation_type, num_classes=1000
+            model_type, activation_type, num_classes=1000, cfg=cfg
         )
         for p in self.model.parameters():
             p.requires_grad = False
@@ -404,6 +411,7 @@ def my_app(cfg: DictConfig) -> None:
         upsampler=cfg.upsampler_type,
         downsampler=cfg.downsampler_type,
         chkpt_dir=chkpt_dir,
+        cfg=cfg,
     )
 
     transform = v2.Compose(
@@ -415,14 +423,29 @@ def my_app(cfg: DictConfig) -> None:
         ]
     )
 
-    dataset = get_dataset(
-        cfg.pytorch_data_dir,
-        cfg.dataset,
-        "train",
-        transform=transform,
-        target_transform=None,
-        include_labels=False,
+    img_size = cfg.model.train.crops.global_crops_size
+    patch_size = cfg.model.train.student.patch_size
+    n_tokens = (img_size // patch_size) ** 2
+    mask_generator = MaskingGenerator(
+        input_size=(img_size // patch_size, img_size // patch_size),
+        max_num_patches=0.5 * img_size // patch_size * img_size // patch_size,
     )
+    dataset = CellDataset2D(
+        base_data_dir=cfg.train.dataset_path,
+        path_to_txt=cfg.train.path_to_txt,
+        search_suffix=cfg.train.search_suffix,
+        max_files=cfg.train.max_files,
+        transform=transform,
+    )
+
+    # dataset = get_dataset(
+    #     cfg.pytorch_data_dir,
+    #     cfg.dataset,
+    #     "train",
+    #     transform=transform,
+    #     target_transform=None,
+    #     include_labels=False,
+    # )
 
     loader = DataLoader(
         dataset, cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
