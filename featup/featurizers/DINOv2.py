@@ -546,12 +546,12 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
             "Initializing upsampler for DINOV2******************, L: 545 in featurizers.py"
         )
         upsampler = get_upsampler(
-            upsampler=cfg.upsampler.type,
+            upsampler=cfg.featup.upsampler.type,
             dim=dim,
         )
-        if cfg.upsampler.weights:
+        if cfg.featup.upsampler.weights:
             state_dict = torch.load(
-                cfg.upsampler.weights,
+                cfg.featup.upsampler.weights,
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )["state_dict"]
@@ -561,6 +561,7 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
                 if "scale_net" not in k and "downsampler" not in k
             }
             upsampler.load_state_dict(state_dict, strict=False)
+
         return upsampler
 
     @staticmethod

@@ -155,7 +155,6 @@ def my_app(cfg: DictConfig) -> None:
         output_root=cfg.output_root,
         cfg=cfg,  # additional parameter for cell interactome
     )
-    raise ValueError("stop here")
     if cfg.use_norm:  # not needed for cell interactome
         model = torch.nn.Sequential(model, ChannelNorm(dim))  # type: ignore
 

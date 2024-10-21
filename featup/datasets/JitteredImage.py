@@ -20,7 +20,7 @@ def apply_jitter(img, max_pad, transform_params):
     else:
         zoomed = padded
 
-    cropped = zoomed[:, :, x:h + x, y:w + y]
+    cropped = zoomed[:, :, x : h + x, y : w + y]
 
     if flip:
         return torch.flip(cropped, [3])
@@ -30,16 +30,19 @@ def apply_jitter(img, max_pad, transform_params):
 
 def sample_transform(use_flips, max_pad, max_zoom, h, w):
     if use_flips:
-        flip = random.random() > .5
+        flip = random.random() > 0.5
     else:
         flip = False
 
-    apply_zoom = random.random() > .5
+    apply_zoom = random.random() > 0.5
     if apply_zoom:
         zoom = random.random() * (max_zoom - 1) + 1
     else:
         zoom = 1.0
 
+    print(
+        f"height: {h}, width: {w}, max_pad: {max_pad}, zoom: {zoom}******** line 43, JitteredImage.py"
+    )
     valid_area_h = (int((h + max_pad * 2) * zoom) - h) + 1
     valid_area_w = (int((w + max_pad * 2) * zoom) - w) + 1
 
@@ -47,12 +50,11 @@ def sample_transform(use_flips, max_pad, max_zoom, h, w):
         "x": torch.tensor(torch.randint(0, valid_area_h, ()).item()),
         "y": torch.tensor(torch.randint(0, valid_area_w, ()).item()),
         "zoom": torch.tensor(zoom),
-        "flip": torch.tensor(flip)
+        "flip": torch.tensor(flip),
     }
 
 
 class JitteredImage(Dataset):
-
     def __init__(self, img, length, use_flips, max_zoom, max_pad):
         self.img = img
         self.length = length
@@ -65,5 +67,9 @@ class JitteredImage(Dataset):
 
     def __getitem__(self, item):
         h, w = self.img.shape[2:]
-        transform_params = sample_transform(self.use_flips, self.max_pad, self.max_zoom, h, w)
-        return apply_jitter(self.img, self.max_pad, transform_params).squeeze(0), transform_params
+        transform_params = sample_transform(
+            self.use_flips, self.max_pad, self.max_zoom, h, w
+        )
+        return apply_jitter(self.img, self.max_pad, transform_params).squeeze(
+            0
+        ), transform_params

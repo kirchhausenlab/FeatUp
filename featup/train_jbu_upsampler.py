@@ -1,5 +1,6 @@
 import gc
 import os
+from loguru import logger
 
 import hydra
 import pytorch_lightning as pl
@@ -113,7 +114,7 @@ class JBUFeatUp(pl.LightningModule):
         self.automatic_optimization = False
 
     def forward(self, x):
-        return self.upsampler(self.model(x))
+        return self.upsampler(self.model(x)[0])
 
     def project(self, feats, proj):
         if proj is None:
@@ -130,7 +131,7 @@ class JBUFeatUp(pl.LightningModule):
                 img = batch["img"]
             else:
                 img, _ = batch
-            lr_feats = self.model(img)
+            lr_feats, _ = self.model(img)
 
         full_rec_loss = 0.0
         full_crf_loss = 0.0
@@ -139,6 +140,14 @@ class JBUFeatUp(pl.LightningModule):
         full_total_loss = 0.0
         for i in range(self.n_jitters):
             hr_feats = self.upsampler(lr_feats, img)
+            logger.info(
+                "Shapes of hr_feats %s, img %s, lr %s"
+                % (
+                    hr_feats.shape,
+                    img.shape,
+                    lr_feats.shape,
+                )
+            )
 
             if hr_feats.shape[2] != img.shape[2]:
                 hr_feats = torch.nn.functional.interpolate(
@@ -150,7 +159,7 @@ class JBUFeatUp(pl.LightningModule):
                     True, self.max_pad, self.max_zoom, img.shape[2], img.shape[3]
                 )
                 jit_img = apply_jitter(img, self.max_pad, transform_params)
-                lr_jit_feats = self.model(jit_img)
+                lr_jit_feats, _ = self.model(jit_img)
 
             if self.random_projection is not None:
                 proj = torch.randn(
@@ -171,6 +180,9 @@ class JBUFeatUp(pl.LightningModule):
             if self.predicted_uncertainty:
                 scales = self.scale_net(lr_jit_feats)
                 scale_factor = 1 / (2 * scales**2)
+                logger.info(
+                    "Scale factor %s and scales are %s" % (scale_factor, scales)
+                )
                 mse = (down_jit_feats - self.project(lr_jit_feats, proj)).square()
                 rec_loss = (scale_factor * mse + scales.log()).mean() / self.n_jitters
             else:
@@ -238,7 +250,7 @@ class JBUFeatUp(pl.LightningModule):
                     img = batch["img"]
                 else:
                     img, _ = batch
-                lr_feats = self.model(img)
+                lr_feats, _ = self.model(img)
 
                 hr_feats = self.upsampler(lr_feats, img)
 
@@ -251,7 +263,7 @@ class JBUFeatUp(pl.LightningModule):
                     True, self.max_pad, self.max_zoom, img.shape[2], img.shape[3]
                 )
                 jit_img = apply_jitter(img, self.max_pad, transform_params)
-                lr_jit_feats = self.model(jit_img)
+                lr_jit_feats, _ = self.model(jit_img)
 
                 if self.random_projection is not None:
                     proj = torch.randn(
@@ -361,8 +373,8 @@ def my_app(cfg: DictConfig) -> None:
         final_size = 16
         kernel_size = 14
     else:
-        final_size = 14
-        kernel_size = 16
+        final_size = 16
+        kernel_size = 14
 
     name = (
         f"{cfg.model_type}_{cfg.upsampler_type}_"

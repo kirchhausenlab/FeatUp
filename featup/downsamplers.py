@@ -70,7 +70,6 @@ class AttentionDownsampler(torch.nn.Module):
             .permute(0, 3, 4, 2, 1)
         )
 
-        print(f"****************{patches.shape}****************")
         patch_logits = self.attention_net(patches).squeeze(-1)
 
         b, h, w, p = patch_logits.shape
@@ -83,5 +82,6 @@ class AttentionDownsampler(torch.nn.Module):
         patch_attention = F.softmax(patch_attn_logits, dim=-1)
 
         downsampled = torch.einsum("bhwpc,bhwp->bchw", patches, patch_attention)
+
         print(f"****************{downsampled.shape}****************")
         return downsampled[:, :c, :, :]
