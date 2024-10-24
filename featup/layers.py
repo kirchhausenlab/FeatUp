@@ -101,5 +101,6 @@ class ChannelNorm(torch.nn.Module):
         self.norm = torch.nn.LayerNorm(dim)
 
     def forward(self, x):
+        # x = x[0]
         new_x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         return new_x

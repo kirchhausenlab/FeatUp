@@ -83,5 +83,4 @@ class AttentionDownsampler(torch.nn.Module):
 
         downsampled = torch.einsum("bhwpc,bhwp->bchw", patches, patch_attention)
 
-        print(f"****************{downsampled.shape}****************")
         return downsampled[:, :c, :, :]

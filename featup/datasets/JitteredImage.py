@@ -40,9 +40,7 @@ def sample_transform(use_flips, max_pad, max_zoom, h, w):
     else:
         zoom = 1.0
 
-    print(
-        f"height: {h}, width: {w}, max_pad: {max_pad}, zoom: {zoom}******** line 43, JitteredImage.py"
-    )
+    
     valid_area_h = (int((h + max_pad * 2) * zoom) - h) + 1
     valid_area_w = (int((w + max_pad * 2) * zoom) - w) + 1
 

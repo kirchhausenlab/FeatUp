@@ -148,7 +148,6 @@ def my_app(cfg: DictConfig) -> None:
 
     print(str(cfg.model_type))
 
-    print("Entering get_featurizer")
     model, _, dim = get_featurizer(
         name=str(cfg.model_type),
         activation_type=cfg.activation_type,

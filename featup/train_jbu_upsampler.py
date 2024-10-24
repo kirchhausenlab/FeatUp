@@ -30,6 +30,7 @@ from cell_interactome.data.dinov2 import (
     DataAugmentationDINO,
     MaskingGenerator,
 )
+from pathlib import Path
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -121,7 +122,7 @@ class JBUFeatUp(pl.LightningModule):
         self.automatic_optimization = False
 
     def forward(self, x):
-        return self.upsampler(self.model(x)[0])
+        return self.upsampler(self.model(x))
 
     def project(self, feats, proj):
         if proj is None:
@@ -135,10 +136,10 @@ class JBUFeatUp(pl.LightningModule):
 
         with torch.no_grad():
             if type(batch) == dict:
-                img = batch["img"]
+                img = batch["image"]
             else:
                 img, _ = batch
-            lr_feats, _ = self.model(img)
+            lr_feats = self.model(img)
 
         full_rec_loss = 0.0
         full_crf_loss = 0.0
@@ -147,14 +148,6 @@ class JBUFeatUp(pl.LightningModule):
         full_total_loss = 0.0
         for i in range(self.n_jitters):
             hr_feats = self.upsampler(lr_feats, img)
-            logger.info(
-                "Shapes of hr_feats %s, img %s, lr %s"
-                % (
-                    hr_feats.shape,
-                    img.shape,
-                    lr_feats.shape,
-                )
-            )
 
             if hr_feats.shape[2] != img.shape[2]:
                 hr_feats = torch.nn.functional.interpolate(
@@ -166,7 +159,7 @@ class JBUFeatUp(pl.LightningModule):
                     True, self.max_pad, self.max_zoom, img.shape[2], img.shape[3]
                 )
                 jit_img = apply_jitter(img, self.max_pad, transform_params)
-                lr_jit_feats, _ = self.model(jit_img)
+                lr_jit_feats = self.model(jit_img)
 
             if self.random_projection is not None:
                 proj = torch.randn(
@@ -187,9 +180,7 @@ class JBUFeatUp(pl.LightningModule):
             if self.predicted_uncertainty:
                 scales = self.scale_net(lr_jit_feats)
                 scale_factor = 1 / (2 * scales**2)
-                logger.info(
-                    "Scale factor %s and scales are %s" % (scale_factor, scales)
-                )
+
                 mse = (down_jit_feats - self.project(lr_jit_feats, proj)).square()
                 rec_loss = (scale_factor * mse + scales.log()).mean() / self.n_jitters
             else:
@@ -232,7 +223,7 @@ class JBUFeatUp(pl.LightningModule):
         self.avg.add("loss/rec", full_rec_loss)
         self.avg.add("loss/total", full_total_loss)
 
-        if self.global_step % 100 == 0:
+        if self.global_step % 1000 == 0:
             self.trainer.save_checkpoint(
                 self.chkpt_dir[:-5]
                 + "/"
@@ -254,10 +245,10 @@ class JBUFeatUp(pl.LightningModule):
         with torch.no_grad():
             if self.trainer.is_global_zero and batch_idx == 0:
                 if type(batch) == dict:
-                    img = batch["img"]
+                    img = batch["image"]
                 else:
                     img, _ = batch
-                lr_feats, _ = self.model(img)
+                lr_feats = self.model(img)
 
                 hr_feats = self.upsampler(lr_feats, img)
 
@@ -270,7 +261,7 @@ class JBUFeatUp(pl.LightningModule):
                     True, self.max_pad, self.max_zoom, img.shape[2], img.shape[3]
                 )
                 jit_img = apply_jitter(img, self.max_pad, transform_params)
-                lr_jit_feats, _ = self.model(jit_img)
+                lr_jit_feats = self.model(jit_img)
 
                 if self.random_projection is not None:
                     proj = torch.randn(
@@ -390,8 +381,8 @@ def my_app(cfg: DictConfig) -> None:
         f"_ent_{cfg.filter_ent_weight}"
     )
 
-    log_dir = join(cfg.output_root, f"logs/jbu/{name}")
-    chkpt_dir = join(cfg.output_root, f"checkpoints/jbu/{name}.ckpt")
+    log_dir = join(cfg.output_root, f"logs/jbu_{cfg.run_id}/{name}")
+    chkpt_dir = join(cfg.output_root, f"checkpoints/jbu_{cfg.run_id}/{name}.ckpt")
     os.makedirs(log_dir, exist_ok=True)
 
     model = JBUFeatUp(
@@ -423,13 +414,6 @@ def my_app(cfg: DictConfig) -> None:
         ]
     )
 
-    img_size = cfg.model.train.crops.global_crops_size
-    patch_size = cfg.model.train.student.patch_size
-    n_tokens = (img_size // patch_size) ** 2
-    mask_generator = MaskingGenerator(
-        input_size=(img_size // patch_size, img_size // patch_size),
-        max_num_patches=0.5 * img_size // patch_size * img_size // patch_size,
-    )
     dataset = CellDataset2D(
         base_data_dir=cfg.train.dataset_path,
         path_to_txt=cfg.train.path_to_txt,
@@ -437,15 +421,6 @@ def my_app(cfg: DictConfig) -> None:
         max_files=cfg.train.max_files,
         transform=transform,
     )
-
-    # dataset = get_dataset(
-    #     cfg.pytorch_data_dir,
-    #     cfg.dataset,
-    #     "train",
-    #     transform=transform,
-    #     target_transform=None,
-    #     include_labels=False,
-    # )
 
     loader = DataLoader(
         dataset, cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
@@ -459,13 +434,13 @@ def my_app(cfg: DictConfig) -> None:
 
     trainer = Trainer(
         accelerator="gpu",
-        strategy="ddp",
         devices=cfg.num_gpus,
         max_epochs=cfg.epochs,
         logger=tb_logger,
-        val_check_interval=100,
-        log_every_n_steps=10,
+        val_check_interval=500,  # original 100
+        log_every_n_steps=150,  # original 10
         callbacks=callbacks,
+        enable_checkpointing=True,
         reload_dataloaders_every_n_epochs=1,
     )
 
@@ -473,7 +448,15 @@ def my_app(cfg: DictConfig) -> None:
     torch.cuda.empty_cache()
     gc.collect()
 
-    trainer.fit(model, loader, val_loader)
+    ckpt_path = Path(cfg.ckpt_path)
+    print(ckpt_path.exists())
+
+    trainer.fit(
+        model=model,
+        train_dataloaders=loader,
+        val_dataloaders=val_loader,
+        ckpt_path=ckpt_path,
+    )
     trainer.save_checkpoint(chkpt_dir)
 
 

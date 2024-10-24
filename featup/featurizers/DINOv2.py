@@ -511,9 +511,7 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
             self.backbone, self.dim = self._init_backbone(
                 student_cfg, global_crops_size, teacher_weights_path
             )
-            logger.info(
-                f"Backbone initialized, was none intially, using DINOv2. Dim: {self.dim}********** L:515 in featurizers.py",
-            )
+
         else:
             self.backbone = backbone
             self.dim = self.backbone.embed_dim
@@ -537,30 +535,28 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
         )
         if self.channel_norm is not None:
             lr_feats = self.channel_norm(lr_feats)
-        hr_feats = self.upsampler(lr_feats, img)
+        hr_feats = self.upsampler(lr_feats, img)  # uncommenting for preds
         return lr_feats, hr_feats
+        return lr_feats
 
     @staticmethod
     def _init_upsampler(cfg: DictConfig, dim: int) -> nn.Module:
-        logger.info(
-            "Initializing upsampler for DINOV2******************, L: 545 in featurizers.py"
-        )
         upsampler = get_upsampler(
             upsampler=cfg.upsampler.type,
             dim=dim,
         )
         if cfg.upsampler.weights:
             state_dict = torch.load(
-                cfg.featup.upsampler.weights,
-
+                cfg.upsampler.weights,
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )["state_dict"]
             state_dict = {
-                k: v
+                k.replace("upsampler.", ""): v
                 for k, v in state_dict.items()
                 if "scale_net" not in k and "downsampler" not in k
             }
+
             upsampler.load_state_dict(state_dict, strict=False)
 
         return upsampler
@@ -576,11 +572,13 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
             global_crops_size=global_crops_size,
             only_teacher=True,
         )
+        # print(f"teacher weights path is {teacher_weights_path}")
         if teacher_weights_path:
             state_dict = torch.load(
                 teacher_weights_path,
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )
+            # teacher.load_state_dict(state_dict["state_dict"], strict=False)
             teacher.load_state_dict(state_dict["model"]["teacher"], strict=False)
         return teacher, dimension
