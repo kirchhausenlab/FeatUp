@@ -8,6 +8,11 @@ logs
 __pycache__/
 *.py[cod]
 
+
+/nfs/scratch1/ajain/cell_interactome/src/third_party/checkpoints
+/nfs/scratch1/ajain/cell_interactome/src/third_party/jbu
+checkpoints
+jbu
 # C extensions
 *.so
 # Distribution / packaging
