@@ -97,7 +97,7 @@ def get_featurizer(name, activation_type="key", **kwargs):
         model = CellInteractomeDinoV2Featurizer(
             student_cfg=cfg.model.train.student,
             global_crops_size=cfg.model.train.crops.global_crops_size,
-            upsampler_cfg=cfg.model.featup,
+            upsampler_cfg=cfg.model.featup.upsampler,
             teacher_weights_path=cfg.model.train.weights,
             backbone=None,
         )

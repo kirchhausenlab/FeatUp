@@ -504,14 +504,13 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
         backbone: Optional[nn.Module] = None,
     ):
         super().__init__()
-        self.use_norm = upsampler_cfg.upsampler.use_norm
+        self.use_norm = upsampler_cfg.use_norm
         self.patch_size = student_cfg.patch_size
 
         if backbone is None:
             self.backbone, self.dim = self._init_backbone(
                 student_cfg, global_crops_size, teacher_weights_path
             )
-
         else:
             self.backbone = backbone
             self.dim = self.backbone.embed_dim
@@ -535,19 +534,19 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
         )
         if self.channel_norm is not None:
             lr_feats = self.channel_norm(lr_feats)
-        hr_feats = self.upsampler(lr_feats, img)  # uncommenting for preds
-        return lr_feats, hr_feats
+        # hr_feats = self.upsampler(lr_feats, img)  # uncommenting for preds
+        # return lr_feats, hr_feats
         return lr_feats
 
     @staticmethod
-    def _init_upsampler(cfg: DictConfig, dim: int) -> nn.Module:
+    def _init_upsampler(upsampler_cfg: DictConfig, dim: int) -> nn.Module:
         upsampler = get_upsampler(
-            upsampler=cfg.upsampler.type,
+            upsampler=upsampler_cfg.type,
             dim=dim,
         )
-        if cfg.upsampler.weights:
+        if upsampler_cfg.weights:
             state_dict = torch.load(
-                cfg.upsampler.weights,
+                upsampler_cfg.weights,
                 map_location=torch.device("cpu"),
                 weights_only=False,
             )["state_dict"]
