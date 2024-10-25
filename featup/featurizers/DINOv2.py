@@ -525,8 +525,8 @@ class CellInteractomeDinoV2Featurizer(nn.Module):
         self,
         img: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        h = img.shape[2] // self.patch_size
-        w = img.shape[3] // self.patch_size
+        h = img.shape[-2] // self.patch_size
+        w = img.shape[-1] // self.patch_size
         lr_feats = (
             self.backbone(img, is_training=True)["x_norm_patchtokens"]
             .reshape(-1, h, w, self.dim)
